@@ -234,6 +234,55 @@ const FlunaDB = {
 
     const { data: { publicUrl } } = client.storage.from('products').getPublicUrl(filePath);
     return { data: { publicUrl }, error: null };
+  },
+
+  // --- CRUD INGREDIENTES (STOCK) ---
+  async createIngredient(ingData) {
+    const client = getSupabaseClient();
+    if (!client) return { error: { message: 'Sin cliente DB' } };
+    return await client.from('ingredients').insert([ingData]).select();
+  },
+
+  async updateIngredient(id, ingData) {
+    const client = getSupabaseClient();
+    if (!client) return { error: { message: 'Sin cliente DB' } };
+    return await client.from('ingredients').update(ingData).eq('id', id).select();
+  },
+
+  async deleteIngredient(id) {
+    const client = getSupabaseClient();
+    if (!client) return { error: { message: 'Sin cliente DB' } };
+    return await client.from('ingredients').delete().eq('id', id);
+  },
+
+  // --- RECETAS DE PRODUCTOS ---
+  async getProductRecipe(productId) {
+    const client = getSupabaseClient();
+    if (!client) return { data: [], error: 'Sin cliente DB' };
+    return await client.from('product_recipes').select(`
+      *,
+      ingredients (*)
+    `).eq('product_id', productId);
+  },
+
+  async saveProductRecipe(productId, recipeItems) {
+    const client = getSupabaseClient();
+    if (!client) return { error: { message: 'Sin cliente DB' } };
+
+    // Eliminar la receta anterior
+    const { error: delErr } = await client.from('product_recipes').delete().eq('product_id', productId);
+    if (delErr) return { error: delErr };
+
+    if (recipeItems.length === 0) return { data: [], error: null };
+
+    // Insertar la nueva receta
+    const formatted = recipeItems.map(item => ({
+      product_id: productId,
+      ingredient_id: item.ingredient_id,
+      amount: item.amount
+    }));
+
+    return await client.from('product_recipes').insert(formatted).select();
   }
 };
 

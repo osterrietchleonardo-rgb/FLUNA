@@ -96,6 +96,10 @@ const FlunaAdmin = {
     // Buscador y Filtro de Productos
     document.getElementById('adminProdSearch')?.addEventListener('input', () => this.renderProductsTable());
     document.getElementById('adminProdCatFilter')?.addEventListener('change', () => this.renderProductsTable());
+
+    // CRUD Insumos y buscador de compras
+    document.getElementById('ingredientForm')?.addEventListener('submit', (e) => this.handleSaveIngredient(e));
+    document.getElementById('purchaseIngSearch')?.addEventListener('input', () => this.filterPurchaseIngredientsDropdown());
   },
 
   switchTab(tabId) {
@@ -374,10 +378,26 @@ const FlunaAdmin = {
       is_active: document.getElementById('prodFormActive').checked
     };
 
+    let product;
     if (id) {
-      await FlunaDB.updateProduct(id, productData);
+      const res = await FlunaDB.updateProduct(id, productData);
+      product = res.data?.[0];
     } else {
-      await FlunaDB.createProduct(productData);
+      const res = await FlunaDB.createProduct(productData);
+      product = res.data?.[0];
+    }
+
+    // Si el producto se guardó, guardar su receta
+    if (product) {
+      const recipeItems = [];
+      document.querySelectorAll('.recipe-item-row').forEach(row => {
+        const ingId = row.querySelector('.recipe-ing-select').value;
+        const amount = parseFloat(row.querySelector('.recipe-amount-input').value);
+        if (ingId && amount > 0) {
+          recipeItems.push({ ingredient_id: ingId, amount: amount });
+        }
+      });
+      await FlunaDB.saveProductRecipe(product.id, recipeItems);
     }
 
     // Resetear selector de archivo
@@ -395,7 +415,7 @@ const FlunaAdmin = {
     }
   },
 
-  editProduct(id) {
+  async editProduct(id) {
     const prod = this.state.products.find(p => p.id === id);
     if (!prod) return;
 
@@ -407,6 +427,16 @@ const FlunaAdmin = {
     document.getElementById('prodFormImg').value = prod.image_url || '';
     document.getElementById('prodFormDesc').value = prod.description || '';
     document.getElementById('prodFormActive').checked = prod.is_active;
+
+    // Cargar receta del producto
+    const container = document.getElementById('recipeIngredientsContainer');
+    if (container) container.innerHTML = '';
+    const { data: recipe } = await FlunaDB.getProductRecipe(prod.id);
+    if (recipe && recipe.length > 0) {
+      recipe.forEach(item => {
+        this.addRecipeRow(item.ingredient_id, item.amount);
+      });
+    }
 
     const modal = document.getElementById('productFormModal');
     modal.classList.remove('hidden');
@@ -447,44 +477,65 @@ const FlunaAdmin = {
 
   // --- STOCK E INGREDIENTES ---
   renderStockSection() {
-    const stockContainer = document.getElementById('stockGrid');
-    if (!stockContainer) return;
+    // Rellenar select de compras con filtro buscador
+    const purchaseIngSelect = document.getElementById('purchaseIngSelect');
+    if (purchaseIngSelect) {
+      const searchTerm = document.getElementById('purchaseIngSearch')?.value.toLowerCase().trim() || '';
+      const filtered = this.state.ingredients.filter(i => i.name.toLowerCase().includes(searchTerm));
+      purchaseIngSelect.innerHTML = filtered.map(i => `<option value="${i.id}">${i.name} (${i.unit})</option>`).join('');
+    }
 
-    stockContainer.innerHTML = this.state.ingredients.map(ing => {
+    const agotadoCol = document.getElementById('stock-col-agotado');
+    const pocoCol = document.getElementById('stock-col-poco');
+    const suficienteCol = document.getElementById('stock-col-suficiente');
+
+    if (!agotadoCol || !pocoCol || !suficienteCol) return;
+
+    const agotadoList = this.state.ingredients.filter(i => Number(i.current_stock) <= 0);
+    const pocoList = this.state.ingredients.filter(i => Number(i.current_stock) <= Number(i.min_stock_alert) && Number(i.current_stock) > 0);
+    const suficienteList = this.state.ingredients.filter(i => Number(i.current_stock) > Number(i.min_stock_alert));
+
+    document.getElementById('stockCountAgotado').innerText = agotadoList.length;
+    document.getElementById('stockCountPoco').innerText = pocoList.length;
+    document.getElementById('stockCountSuficiente').innerText = suficienteList.length;
+
+    const renderCard = (ing) => {
       const current = Number(ing.current_stock);
       const min = Number(ing.min_stock_alert);
-      const isAlert = current <= min;
-      const pct = Math.min(100, Math.round((current / (min * 3)) * 100));
+      const isAlert = current <= min && current > 0;
+      const isAgotado = current <= 0;
+      const pct = Math.min(100, Math.round((current / (min || 1)) * 100));
 
       return `
-        <div class="glass-card p-5 space-y-4 ${isAlert ? 'border-rose-500/50 shadow-lg shadow-rose-500/10' : ''}">
+        <div class="glass-card p-4 space-y-3 border ${isAgotado ? 'border-rose-500/30' : isAlert ? 'border-yellow-500/30' : 'border-white/5'} hover:border-orange-500/40 transition">
           <div class="flex justify-between items-start">
             <div>
-              <h4 class="text-base font-bold text-white">${ing.name}</h4>
-              <span class="text-xs text-slate-400 font-mono">Costo u: $${Number(ing.cost_per_unit).toLocaleString('es-AR')} / ${ing.unit}</span>
+              <h5 class="text-sm font-bold text-white">${ing.name}</h5>
+              <span class="text-[10px] text-slate-500 font-mono">Costo: $${Number(ing.cost_per_unit).toLocaleString('es-AR')} / ${ing.unit}</span>
             </div>
-            ${isAlert ? '<span class="bg-rose-500/20 text-rose-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase animate-pulse">¡Stock Mínimo!</span>' : ''}
+            <div class="flex gap-2" onclick="event.stopPropagation()">
+              <button onclick="FlunaAdmin.editIngredient('${ing.id}')" class="text-sky-400 hover:text-sky-300 text-xs"><i class="fa-solid fa-pen-to-square"></i></button>
+              <button onclick="FlunaAdmin.deleteIngredient('${ing.id}')" class="text-rose-400 hover:text-rose-300 text-xs"><i class="fa-solid fa-trash"></i></button>
+            </div>
           </div>
 
           <div class="space-y-1">
             <div class="flex justify-between text-xs font-mono">
-              <span class="text-slate-400">Stock Actual</span>
-              <span class="font-bold text-white">${current} ${ing.unit}</span>
+              <span class="text-slate-400">Stock actual:</span>
+              <span class="font-extrabold ${isAgotado ? 'text-rose-400' : isAlert ? 'text-yellow-400' : 'text-emerald-400'}">${current} ${ing.unit}</span>
             </div>
-            <div class="w-full h-2 bg-slate-900 rounded-full overflow-hidden">
-              <div class="h-full ${isAlert ? 'bg-rose-500' : 'bg-orange-500'}" style="width: ${pct}%"></div>
+            <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+              <div class="h-full ${isAgotado ? 'bg-rose-500' : isAlert ? 'bg-yellow-500' : 'bg-emerald-500'}" style="width: ${pct}%"></div>
             </div>
             <div class="text-[10px] text-slate-500 font-mono text-right">Alerta en: ${min} ${ing.unit}</div>
           </div>
         </div>
       `;
-    }).join('');
+    };
 
-    // Rellenar select de compras
-    const purchaseIngSelect = document.getElementById('purchaseIngSelect');
-    if (purchaseIngSelect) {
-      purchaseIngSelect.innerHTML = this.state.ingredients.map(i => `<option value="${i.id}">${i.name} (${i.unit})</option>`).join('');
-    }
+    agotadoCol.innerHTML = agotadoList.map(renderCard).join('') || `<p class="text-slate-500 text-xs text-center py-4">Sin insumos agotados 🎉</p>`;
+    pocoCol.innerHTML = pocoList.map(renderCard).join('') || `<p class="text-slate-500 text-xs text-center py-4">Sin alertas de stock</p>`;
+    suficienteCol.innerHTML = suficienteList.map(renderCard).join('') || `<p class="text-slate-500 text-xs text-center py-4">Sin insumos cargados</p>`;
   },
 
   async handleSavePurchase(e) {
@@ -664,6 +715,79 @@ const FlunaAdmin = {
     const modal = document.getElementById('adminOrderDetailModal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
+  },
+
+  // --- CRUD INGREDIENTES (STOCK) ---
+  editIngredient(id) {
+    const ing = this.state.ingredients.find(i => i.id === id);
+    if (!ing) return;
+
+    document.getElementById('ingFormId').value = ing.id;
+    document.getElementById('ingFormName').value = ing.name;
+    document.getElementById('ingFormUnit').value = ing.unit;
+    document.getElementById('ingFormStock').value = ing.current_stock;
+    document.getElementById('ingFormMinAlert').value = ing.min_stock_alert;
+    document.getElementById('ingFormCost').value = ing.cost_per_unit;
+
+    document.getElementById('ingredientModalTitle').innerText = 'Editar Insumo';
+    const modal = document.getElementById('ingredientModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  },
+
+  async deleteIngredient(id) {
+    if (confirm('¿Eliminar este insumo del inventario? Esto afectará las recetas que lo utilicen.')) {
+      await FlunaDB.deleteIngredient(id);
+      this.loadAllData();
+    }
+  },
+
+  async handleSaveIngredient(e) {
+    e.preventDefault();
+    const id = document.getElementById('ingFormId').value;
+    const ingData = {
+      name: document.getElementById('ingFormName').value.trim(),
+      unit: document.getElementById('ingFormUnit').value,
+      current_stock: parseFloat(document.getElementById('ingFormStock').value),
+      min_stock_alert: parseFloat(document.getElementById('ingFormMinAlert').value),
+      cost_per_unit: parseFloat(document.getElementById('ingFormCost').value)
+    };
+
+    if (id) {
+      await FlunaDB.updateIngredient(id, ingData);
+    } else {
+      await FlunaDB.createIngredient(ingData);
+    }
+
+    document.getElementById('ingredientModal').classList.add('hidden');
+    this.loadAllData();
+  },
+
+  // --- RECETAS DINÁMICAS (EN PRODUCTOS) ---
+  addRecipeRow(ingredientId = '', amount = '') {
+    const container = document.getElementById('recipeIngredientsContainer');
+    if (!container) return;
+
+    const rowId = 'recipe-row-' + Date.now() + Math.round(Math.random() * 1000);
+    const options = this.state.ingredients.map(ing => `
+      <option value="${ing.id}" ${ing.id === ingredientId ? 'selected' : ''}>${ing.name} (${ing.unit})</option>
+    `).join('');
+
+    const html = `
+      <div id="${rowId}" class="flex items-center gap-2 bg-slate-900/50 p-2 rounded-lg border border-white/5 recipe-item-row">
+        <select class="flex-1 bg-slate-900 border border-white/10 rounded-xl p-2 text-[11px] text-white recipe-ing-select">
+          <option value="">-- Seleccionar --</option>
+          ${options}
+        </select>
+        <input type="number" step="0.001" value="${amount}" placeholder="Cant." required class="w-20 bg-slate-900 border border-white/10 rounded-xl p-2 text-[11px] text-white recipe-amount-input">
+        <button type="button" onclick="FlunaAdmin.removeRecipeRow('${rowId}')" class="text-rose-400 hover:text-rose-300 p-2 text-xs"><i class="fa-solid fa-trash"></i></button>
+      </div>
+    `;
+    container.insertAdjacentHTML('beforeend', html);
+  },
+
+  removeRecipeRow(rowId) {
+    document.getElementById(rowId)?.remove();
   }
 };
 

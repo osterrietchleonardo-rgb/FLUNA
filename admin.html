@@ -267,15 +267,49 @@
 
     <!-- SECTION 5: STOCK Y COMPRAS -->
     <section id="section-stock" class="admin-section hidden space-y-6">
-      <div class="flex justify-between items-center">
-        <h3 class="text-lg font-bold text-white font-mono">Inventario de Materia Prima e Ingredientes</h3>
-        <button onclick="document.getElementById('purchaseModal').classList.remove('hidden'); document.getElementById('purchaseModal').classList.add('flex');" class="btn-fluna py-2 px-4 text-xs font-bold flex items-center gap-2">
-          <i class="fa-solid fa-cart-shopping"></i> Registrar Compra
-        </button>
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/10 pb-4">
+        <div>
+          <h3 class="text-lg font-bold text-white font-mono">Inventario de Materia Prima e Insumos</h3>
+          <p class="text-[10px] text-slate-400">Control visual de tus ingredientes en tiempo real</p>
+        </div>
+        <div class="flex items-center gap-2 w-full sm:w-auto">
+          <button onclick="document.getElementById('ingredientModal').classList.remove('hidden'); document.getElementById('ingredientModal').classList.add('flex'); document.getElementById('ingredientForm').reset(); document.getElementById('ingFormId').value='';" class="btn-fluna py-2 px-4 text-xs font-bold flex items-center gap-2">
+            <i class="fa-solid fa-plus"></i> Nuevo Insumo
+          </button>
+          <button onclick="document.getElementById('purchaseModal').classList.remove('hidden'); document.getElementById('purchaseModal').classList.add('flex');" class="btn-fluna-outline py-2 px-4 text-xs font-bold flex items-center gap-2">
+            <i class="fa-solid fa-cart-shopping"></i> Registrar Compra
+          </button>
+        </div>
       </div>
 
-      <div id="stockGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        <!-- Carga dinámica admin.js -->
+      <!-- Tablero Kanban de Stock Crítico -->
+      <div class="flex gap-4 overflow-x-auto pb-4 w-full">
+        <!-- Columna Agotado -->
+        <div class="kanban-column space-y-3 flex-1 min-w-[260px]">
+          <h4 class="text-xs font-bold text-rose-400 uppercase font-mono pb-2 border-b border-rose-500/30 flex items-center justify-between">
+            <span>❌ AGOTADO (0 u)</span>
+            <span id="stockCountAgotado" class="bg-rose-500/20 px-2 py-0.5 rounded text-[10px]">0</span>
+          </h4>
+          <div id="stock-col-agotado" class="space-y-3"></div>
+        </div>
+
+        <!-- Columna Poco Stock -->
+        <div class="kanban-column space-y-3 flex-1 min-w-[260px]">
+          <h4 class="text-xs font-bold text-yellow-400 uppercase font-mono pb-2 border-b border-yellow-500/30 flex items-center justify-between">
+            <span>⚠️ POCO STOCK (Crítico)</span>
+            <span id="stockCountPoco" class="bg-yellow-500/20 px-2 py-0.5 rounded text-[10px]">0</span>
+          </h4>
+          <div id="stock-col-poco" class="space-y-3"></div>
+        </div>
+
+        <!-- Columna Suficiente -->
+        <div class="kanban-column space-y-3 flex-1 min-w-[260px]">
+          <h4 class="text-xs font-bold text-emerald-400 uppercase font-mono pb-2 border-b border-emerald-500/30 flex items-center justify-between">
+            <span>✅ SUFICIENTE</span>
+            <span id="stockCountSuficiente" class="bg-emerald-500/20 px-2 py-0.5 rounded text-[10px]">0</span>
+          </h4>
+          <div id="stock-col-suficiente" class="space-y-3"></div>
+        </div>
       </div>
     </section>
 
@@ -380,6 +414,18 @@
           <label class="block font-bold text-slate-300 mb-1">Descripción</label>
           <textarea id="prodFormDesc" rows="2" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white"></textarea>
         </div>
+        
+        <!-- PANEL DE RECETA / INSUMOS -->
+        <div class="border-t border-white/10 pt-3 space-y-2">
+          <label class="block font-bold text-slate-300 uppercase tracking-wider text-[10px] font-mono">Receta de Insumos (Descuento Automático al Vender)</label>
+          <div id="recipeIngredientsContainer" class="space-y-2 max-h-[160px] overflow-y-auto">
+            <!-- Filas dinámicas de ingredientes -->
+          </div>
+          <button type="button" onclick="FlunaAdmin.addRecipeRow()" class="btn-fluna-outline py-1.5 px-3 text-[10px] font-bold flex items-center gap-1.5 mt-2">
+            <i class="fa-solid fa-plus"></i> Agregar Insumo a la Receta
+          </button>
+        </div>
+
         <button type="submit" class="w-full btn-fluna py-3 font-bold text-xs">Guardar Producto</button>
       </form>
     </div>
@@ -396,6 +442,7 @@
       <form id="purchaseForm" class="space-y-3 text-xs">
         <div>
           <label class="block font-bold text-slate-300 mb-1">Ingrediente</label>
+          <input type="text" id="purchaseIngSearch" placeholder="🔍 Buscar ingrediente..." class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-xs text-white focus:border-orange-500 focus:outline-none mb-1.5">
           <select id="purchaseIngSelect" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white"></select>
         </div>
         <div>
@@ -475,6 +522,50 @@
       <form id="adminLoginForm" class="space-y-4">
         <input type="password" id="adminPwdInput" required placeholder="••••••••••••" class="w-full text-center bg-slate-900 border border-white/10 rounded-xl p-3 text-white font-mono focus:border-orange-500 focus:outline-none">
         <button type="submit" class="w-full btn-fluna py-3 font-bold text-xs">Acceder al Sistema</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Crear/Editar Insumo -->
+  <div id="ingredientModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-md p-6 space-y-4">
+      <div class="flex justify-between items-center border-b border-white/10 pb-3">
+        <h3 id="ingredientModalTitle" class="text-lg font-bold text-white">Formulario de Insumo</h3>
+        <button onclick="document.getElementById('ingredientModal').classList.add('hidden')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <form id="ingredientForm" class="space-y-3 text-xs">
+        <input type="hidden" id="ingFormId">
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Nombre del Insumo *</label>
+          <input type="text" id="ingFormName" required placeholder="Ej: Jamón Cocido Extra" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Unidad de Medida *</label>
+            <select id="ingFormUnit" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+              <option value="kg">kg (Kilogramos)</option>
+              <option value="g">g (Gramos)</option>
+              <option value="litros">litros (Litros)</option>
+              <option value="u">u (Unidades)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Stock Actual *</label>
+            <input type="number" step="0.001" id="ingFormStock" required value="0" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Alerta Stock Mínimo *</label>
+            <input type="number" step="0.001" id="ingFormMinAlert" required value="5" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Costo por Unidad ($) *</label>
+            <input type="number" step="0.01" id="ingFormCost" required value="0" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+          </div>
+        </div>
+        <button type="submit" class="w-full btn-fluna py-3 font-bold text-xs">Guardar Insumo</button>
       </form>
     </div>
   </div>
