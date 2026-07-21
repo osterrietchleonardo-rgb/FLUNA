@@ -79,6 +79,48 @@
   }
   </script>
 
+  <!-- GEO FAQPage Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "¿Qué hace especiales a las pizzas de FLuna?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Nuestras pizzas se elaboran con masa madre fermentada de forma natural durante 48 horas. Esto las hace increíblemente ligeras, fáciles de digerir y con bordes aireados y crujientes (alveolados)."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "¿Cómo funciona el envío y el rastreo en vivo?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Una vez que confirmás tu pedido, nuestro Kanban de producción en tiempo real lo recibe. Podés ver cada etapa del proceso (en cocina, embalando, en camino) desde la sección 'Seguir mi pedido' en esta misma app."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "¿Qué métodos de pago aceptan?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Aceptamos tarjetas de débito/crédito, dinero en cuenta de Mercado Pago y efectivo al recibir tu pedido. Todas las transacciones online están protegidas de forma segura."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "¿Puedo retirar mi pedido por el local?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "¡Sí, claro! Durante el checkout podés elegir la modalidad 'Retiro en Local' para pasar a buscar tus pizzas recién salidas del horno de piedra."
+        }
+      }
+    ]
+  }
+  </script>
+
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -408,6 +450,49 @@
       </form>
     </div>
   </div>
+
+  <!-- Sección de Preguntas Frecuentes (FAQ / Q&A) - GEO & SEO Optimized -->
+  <section id="faq" class="max-w-6xl mx-auto px-4 mt-16 space-y-8 relative z-10 w-full">
+    <div class="text-center max-w-xl mx-auto space-y-2">
+      <h2 class="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">Preguntas Frecuentes</h2>
+      <p class="text-xs text-slate-400 font-mono">Todo lo que necesitás saber sobre la experiencia FLuna.</p>
+    </div>
+    
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="glass-card p-6 space-y-3 border border-white/5 hover:border-orange-500/30 transition duration-300">
+        <h3 class="text-sm font-extrabold text-orange-400 flex items-center gap-2">
+          <i class="fa-solid fa-circle-question"></i> ¿Qué hace especiales a las pizzas de FLuna?
+        </h3>
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Nuestras pizzas se elaboran con masa madre fermentada de forma natural durante 48 horas. Esto las hace increíblemente ligeras, fáciles de digerir y con bordes aireados y crujientes (alveolados).
+        </p>
+      </div>
+      <div class="glass-card p-6 space-y-3 border border-white/5 hover:border-orange-500/30 transition duration-300">
+        <h3 class="text-sm font-extrabold text-orange-400 flex items-center gap-2">
+          <i class="fa-solid fa-circle-question"></i> ¿Cómo funciona el envío y el rastreo en vivo?
+        </h3>
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Una vez que confirmás tu pedido, nuestro Kanban de producción en tiempo real lo recibe. Podés ver cada etapa del proceso (en cocina, embalando, en camino) desde la sección "Seguir mi pedido" en esta misma app.
+        </p>
+      </div>
+      <div class="glass-card p-6 space-y-3 border border-white/5 hover:border-orange-500/30 transition duration-300">
+        <h3 class="text-sm font-extrabold text-orange-400 flex items-center gap-2">
+          <i class="fa-solid fa-circle-question"></i> ¿Qué métodos de pago aceptan?
+        </h3>
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Aceptamos tarjetas de débito/crédito, dinero en cuenta de Mercado Pago y efectivo al recibir tu pedido o transferencia directa. Todas las transacciones online están protegidas de forma segura.
+        </p>
+      </div>
+      <div class="glass-card p-6 space-y-3 border border-white/5 hover:border-orange-500/30 transition duration-300">
+        <h3 class="text-sm font-extrabold text-orange-400 flex items-center gap-2">
+          <i class="fa-solid fa-circle-question"></i> ¿Puedo retirar mi pedido por el local?
+        </h3>
+        <p class="text-xs text-slate-300 leading-relaxed">
+          ¡Sí, claro! Durante el checkout podés elegir la modalidad "Retiro en Local" para pasar a buscar tus pizzas recién salidas del horno de piedra.
+        </p>
+      </div>
+    </div>
+  </section>
 
   <!-- Footer -->
   <footer class="glass-header mt-12 py-6 px-4 border-t border-white/10 text-center text-xs text-slate-400 space-y-2">
