@@ -3,14 +3,81 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>FLuna Pizzería | Ultra Premium PWA</title>
+  <title>FLuna Pizzería | Pizzas Artesanales de Masa Madre y Delivery Online</title>
   
   <!-- SEO Meta Tags -->
-  <meta name="description" content="Pizzería FLuna - Pizzas artesanales de masa madre, empanadas premium y delivery online con pago seguro Mercado Pago.">
+  <meta name="description" content="¿Buscás la mejor pizza artesanal? Probá FLuna: pizzas de masa madre fermentadas por 48hs en horno de piedra. Delivery rápido y pago seguro con Mercado Pago.">
   <meta name="theme-color" content="#E96D25">
+  <link rel="canonical" href="https://fluna.vercel.app">
   <link rel="manifest" href="./manifest.json">
   <link rel="apple-touch-icon" href="./brand/logo_fluna.jpg">
   <link rel="icon" type="image/jpeg" href="./brand/logo_fluna.jpg">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://fluna.vercel.app">
+  <meta property="og:title" content="FLuna Pizzería | Pizzas Artesanales de Masa Madre y Delivery Online">
+  <meta property="og:description" content="¿Buscás la mejor pizza artesanal? Probá FLuna: pizzas de masa madre fermentadas por 48hs en horno de piedra. Delivery rápido y pago seguro con Mercado Pago.">
+  <meta property="og:image" content="https://fluna.vercel.app/brand/logo_fluna.jpg">
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="https://fluna.vercel.app">
+  <meta property="twitter:title" content="FLuna Pizzería | Pizzas Artesanales de Masa Madre y Delivery Online">
+  <meta property="twitter:description" content="¿Buscás la mejor pizza artesanal? Probá FLuna: pizzas de masa madre fermentadas por 48hs en horno de piedra. Delivery rápido y pago seguro con Mercado Pago.">
+  <meta property="twitter:image" content="https://fluna.vercel.app/brand/logo_fluna.jpg">
+
+  <!-- GEO & Search Engine Optimization Structured Data (JSON-LD) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "BarOrPub",
+    "additionalType": "Pizzeria",
+    "name": "FLuna Pizzería",
+    "image": "https://fluna.vercel.app/brand/logo_fluna.jpg",
+    "@id": "https://fluna.vercel.app/#pizzeria",
+    "url": "https://fluna.vercel.app",
+    "telephone": "+541123456789",
+    "priceRange": "$$",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "Av. Corrientes 1234",
+      "addressLocality": "Buenos Aires",
+      "addressRegion": "CABA",
+      "postalCode": "1043",
+      "addressCountry": "AR"
+    },
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": -34.603722,
+      "longitude": -58.381592
+    },
+    "openingHoursSpecification": {
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday"
+      ],
+      "opens": "19:00",
+      "closes": "23:59"
+    },
+    "sameAs": [
+      "https://www.instagram.com/fluna_pizzeria/?hl=es"
+    ],
+    "menu": "https://fluna.vercel.app/#menu",
+    "servesCuisine": [
+      "Italian",
+      "Pizza",
+      "Empanadas"
+    ],
+    "acceptsReservations": "false"
+  }
+  </script>
 
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -74,7 +141,7 @@
         <!-- Tracker / Orders Button -->
         <button id="accountBtn" class="bg-slate-900/80 hover:bg-slate-800 text-slate-200 p-2.5 rounded-xl border border-white/10 text-xs font-medium flex items-center gap-2 transition">
           <i class="fa-solid fa-clock-rotate-left text-orange-400"></i>
-          <span class="hidden md:inline font-mono">Mis Pedidos</span>
+          <span class="hidden md:inline font-semibold">Seguir mi pedido 🕒</span>
         </button>
 
         <!-- Cart Drawer Trigger Button -->
@@ -94,18 +161,18 @@
     <section class="glass-panel-glow p-8 md:p-12 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
       <div class="space-y-4 max-w-xl text-center md:text-left z-10">
         <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-mono font-bold">
-          <i class="fa-solid fa-fire"></i> HORNO DE PIEDRA 450°C
+          <i class="fa-solid fa-fire"></i> HORNO DE PIEDRA A 450°C
         </div>
         <h2 class="text-3xl md:text-5xl font-black text-white leading-tight">
-          PIZZAS NEÓN <br><span class="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-500">SABOR ULTRA PREMIUM</span>
+          Las pizzas que tus noches estaban pidiendo <br><span class="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-500">Viví la experiencia FLuna</span>
         </h2>
         <p class="text-slate-300 text-sm md:text-base leading-relaxed">
-          Masa madre fermentada 48hs, ingredientes seleccionados de primera calidad y envío veloz rastreable en tiempo real.
+          Masa madre con 48 horas de fermentación lenta, logrando ese borde alveolado crujiente y perfecto. Elegí tus ingredientes favoritos, completá tu pedido de forma segura y seguilo en vivo hasta la puerta de tu casa.
         </p>
       </div>
 
       <div class="relative w-48 h-48 md:w-64 md:h-64 animate-float">
-        <img src="./brand/logo_fluna.jpg" alt="FLuna Brand Logo" class="w-full h-full object-cover rounded-3xl shadow-2xl border-2 border-orange-500/40">
+        <img src="./brand/logo_fluna.jpg" alt="Logo oficial de Pizzería FLuna" class="w-full h-full object-cover rounded-3xl shadow-2xl border-2 border-orange-500/40">
       </div>
     </section>
 
@@ -224,7 +291,7 @@
       </div>
 
       <button id="btnCheckout" class="w-full btn-fluna py-3.5 flex items-center justify-center gap-2 font-bold text-sm shadow-xl">
-        <span>Iniciar Checkout</span> <i class="fa-solid fa-arrow-right"></i>
+        <span>¡Quiero mi pizza ya! 🚀</span>
       </button>
     </div>
   </aside>
@@ -281,7 +348,7 @@
         </div>
 
         <button type="submit" class="w-full btn-fluna py-3.5 font-bold text-sm shadow-lg flex items-center justify-center gap-2">
-          <i class="fa-solid fa-lock"></i> Confirmar y Procesar Pago
+          <i class="fa-solid fa-lock"></i> Confirmar y pagar de forma segura 🔒
         </button>
       </form>
     </div>

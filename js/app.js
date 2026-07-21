@@ -237,7 +237,7 @@ const FlunaApp = {
 
             <button onclick="FlunaApp.openProductModal('${product.id}')" 
                     class="btn-fluna py-2 px-4 text-xs font-bold flex items-center gap-2">
-              <i class="fa-solid fa-plus"></i> Personalizar
+              <i class="fa-solid fa-plus"></i> Armar a mi gusto 🍕
             </button>
           </div>
         </div>

@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /admin.html
+Disallow: /admin_fluna
+
+Sitemap: https://fluna.vercel.app/sitemap.xml
