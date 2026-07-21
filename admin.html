@@ -241,27 +241,214 @@
 
     <!-- SECTION 4: FINANZAS Y RESULTADOS -->
     <section id="section-finances" class="admin-section hidden space-y-6">
-      <div class="flex justify-between items-center">
-        <h3 class="text-lg font-bold text-white font-mono">Estado de Resultados y Flujo de Caja</h3>
-        <button onclick="document.getElementById('financeModal').classList.remove('hidden'); document.getElementById('financeModal').classList.add('flex');" class="btn-fluna py-2 px-4 text-xs font-bold flex items-center gap-2">
-          <i class="fa-solid fa-plus"></i> Registrar Movimiento
-        </button>
+      <div class="flex justify-between items-center border-b border-white/10 pb-2">
+        <h3 class="text-lg font-bold text-white font-mono">Control y Métricas Financieras</h3>
+        
+        <!-- Sub-Navegación de Finanzas -->
+        <div class="flex gap-4 text-xs font-mono">
+          <button id="btnFinTabRegistro" onclick="FlunaAdmin.switchFinTab('registro')" class="pb-2 border-b-2 border-orange-500 text-orange-400 font-bold focus:outline-none">
+            📋 REGISTRO
+          </button>
+          <button id="btnFinTabMetricas" onclick="FlunaAdmin.switchFinTab('metricas')" class="pb-2 border-b-2 border-transparent text-slate-400 hover:text-white focus:outline-none">
+            📊 MÉTRICAS Y SALUD (EBITDA / P&L)
+          </button>
+        </div>
       </div>
 
-      <div class="glass-panel overflow-hidden">
-        <table class="w-full text-left border-collapse">
-          <thead class="bg-slate-950 text-slate-400 font-mono text-xs uppercase border-b border-white/10">
-            <tr>
-              <th class="p-3">Fecha</th>
-              <th class="p-3">Descripción</th>
-              <th class="p-3">Categoría</th>
-              <th class="p-3">Monto</th>
-            </tr>
-          </thead>
-          <tbody id="financesTableBody">
-            <!-- Carga dinámica admin.js -->
-          </tbody>
-        </table>
+      <!-- SUB-TAB 1: REGISTRO -->
+      <div id="finTabRegistro" class="space-y-4">
+        <div class="flex justify-between items-center">
+          <h4 class="text-xs font-bold text-slate-400 font-mono uppercase tracking-wider">Historial de Transacciones</h4>
+          <button onclick="document.getElementById('financeModal').classList.remove('hidden'); document.getElementById('financeModal').classList.add('flex');" class="btn-fluna py-2 px-4 text-xs font-bold flex items-center gap-2">
+            <i class="fa-solid fa-plus"></i> Registrar Movimiento
+          </button>
+        </div>
+        <div class="glass-panel overflow-hidden">
+          <table class="w-full text-left border-collapse">
+            <thead class="bg-slate-950 text-slate-400 font-mono text-xs uppercase border-b border-white/10">
+              <tr>
+                <th class="p-3">Fecha</th>
+                <th class="p-3">Descripción</th>
+                <th class="p-3">Categoría</th>
+                <th class="p-3">Monto</th>
+              </tr>
+            </thead>
+            <tbody id="financesTableBody">
+              <!-- Carga dinámica admin.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SUB-TAB 2: MÉTRICAS Y SALUD -->
+      <div id="finTabMetricas" class="space-y-6 hidden">
+        <!-- Tarjetas Visuales KPI -->
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          <!-- Ventas / Ingresos Totales -->
+          <div class="glass-panel p-4 space-y-1">
+            <span class="text-[9px] text-slate-400 font-mono uppercase block">Ingresos Brutos</span>
+            <div id="finKpiIngresos" class="text-sm font-extrabold text-emerald-400 font-mono">$0</div>
+          </div>
+          <!-- Costos Mercadería (COGS) -->
+          <div class="glass-panel p-4 space-y-1">
+            <span class="text-[9px] text-slate-400 font-mono uppercase block">Costos (COGS)</span>
+            <div id="finKpiCogs" class="text-sm font-extrabold text-rose-400 font-mono">$0</div>
+          </div>
+          <!-- Impuestos -->
+          <div class="glass-panel p-4 space-y-1">
+            <span class="text-[9px] text-slate-400 font-mono uppercase block">Impuestos</span>
+            <div id="finKpiImpuestos" class="text-sm font-extrabold text-orange-400 font-mono">$0</div>
+          </div>
+          <!-- Deudas -->
+          <div class="glass-panel p-4 space-y-1">
+            <span class="text-[9px] text-slate-400 font-mono uppercase block">Deudas Activas</span>
+            <div id="finKpiDeudas" class="text-sm font-extrabold text-amber-500 font-mono">$0</div>
+          </div>
+          <!-- Margen Bruto % -->
+          <div class="glass-panel p-4 space-y-1">
+            <span class="text-[9px] text-slate-400 font-mono uppercase block">Margen Bruto</span>
+            <div id="finKpiMargenBruto" class="text-sm font-extrabold text-white font-mono">0%</div>
+          </div>
+          <!-- Utilidad Neta -->
+          <div class="glass-panel p-4 space-y-1">
+            <span class="text-[9px] text-slate-400 font-mono uppercase block">Utilidad Neta</span>
+            <div id="finKpiUtilidadNeta" class="text-sm font-extrabold text-cyan-400 font-mono">$0</div>
+          </div>
+        </div>
+
+        <!-- Gráficos de barra y evolución -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="glass-panel p-4 space-y-2">
+            <h5 class="text-xs font-bold text-white font-mono uppercase tracking-wider">Evolución de Ingresos vs Gastos</h5>
+            <div class="h-64 relative w-full flex items-center justify-center">
+              <canvas id="chartFinEvolucion"></canvas>
+            </div>
+          </div>
+          <div class="glass-panel p-4 space-y-2">
+            <h5 class="text-xs font-bold text-white font-mono uppercase tracking-wider">Distribución de Gastos</h5>
+            <div class="h-64 relative w-full flex items-center justify-center">
+              <canvas id="chartFinGastos"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <!-- TABLA: Estado de Resultados (P&L) Profesional -->
+        <div class="glass-panel p-6 space-y-4">
+          <h4 class="text-sm font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
+            <i class="fa-solid fa-file-invoice-dollar text-orange-500"></i> Estado de Resultados Profesional (P&L)
+          </h4>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs border-collapse">
+              <thead>
+                <tr class="border-b border-white/20 bg-slate-950 font-mono uppercase text-slate-400 text-left">
+                  <th class="p-3">Concepto Financiero</th>
+                  <th class="p-3 text-right">Monto ($)</th>
+                  <th class="p-3 text-right">% Ingresos</th>
+                </tr>
+              </thead>
+              <tbody class="font-mono divide-y divide-white/5">
+                <tr>
+                  <td class="p-3 font-semibold text-white">Ingresos Totales (Ventas + Pedidos)</td>
+                  <td id="plIngresos" class="p-3 text-right text-emerald-400 font-bold">$0</td>
+                  <td class="p-3 text-right text-slate-400">100.0%</td>
+                </tr>
+                <tr>
+                  <td class="p-3 text-slate-300 pl-6">(-) Costos de Mercadería (COGS / Insumos)</td>
+                  <td id="plCogs" class="p-3 text-right text-rose-400">$0</td>
+                  <td id="plCogsPct" class="p-3 text-right text-slate-500">0.0%</td>
+                </tr>
+                <tr class="bg-slate-900/40 font-bold">
+                  <td class="p-3 text-white">(=) UTILIDAD BRUTA</td>
+                  <td id="plUtilidadBruta" class="p-3 text-right text-white">$0</td>
+                  <td id="plUtilidadBrutaPct" class="p-3 text-right text-slate-400">0.0%</td>
+                </tr>
+                <tr>
+                  <td class="p-3 text-slate-300 pl-6">(-) Gastos Operativos (Alquiler, Servicios, Sueldos, Marketing, etc.)</td>
+                  <td id="plGastosOpe" class="p-3 text-right text-rose-400">$0</td>
+                  <td id="plGastosOpePct" class="p-3 text-right text-slate-500">0.0%</td>
+                </tr>
+                <tr class="bg-slate-900/60 font-bold text-orange-400">
+                  <td class="p-3">(=) EBITDA</td>
+                  <td id="plEbitda" class="p-3 text-right font-extrabold">$0</td>
+                  <td id="plEbitdaPct" class="p-3 text-right font-bold">0.0%</td>
+                </tr>
+                <tr>
+                  <td class="p-3 text-slate-300 pl-6">(-) Depreciaciones y Amortizaciones (Equipamiento)</td>
+                  <td id="plDepreciacion" class="p-3 text-right text-rose-400">$0</td>
+                  <td id="plDepreciacionPct" class="p-3 text-right text-slate-500">0.0%</td>
+                </tr>
+                <tr>
+                  <td class="p-3 text-slate-300 pl-6">(-) Gastos Financieros e Intereses (Deudas)</td>
+                  <td id="plGastosFin" class="p-3 text-right text-rose-400">$0</td>
+                  <td id="plGastosFinPct" class="p-3 text-right text-slate-500">0.0%</td>
+                </tr>
+                <tr>
+                  <td class="p-3 text-slate-300 pl-6">(-) Impuestos Directos</td>
+                  <td id="plImpuestos" class="p-3 text-right text-rose-400">$0</td>
+                  <td id="plImpuestosPct" class="p-3 text-right text-slate-500">0.0%</td>
+                </tr>
+                <tr class="bg-slate-950 font-extrabold text-cyan-400">
+                  <td class="p-3">(=) UTILIDAD NETA (Resultado de FLuna)</td>
+                  <td id="plUtilidadNeta" class="p-3 text-right text-cyan-400 text-sm">$0</td>
+                  <td id="plUtilidadNetaPct" class="p-3 text-right text-cyan-400 text-sm">0.0%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TABLA: Flujo de Caja y Diagnóstico de Salud -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="glass-panel p-6 space-y-4 lg:col-span-2">
+            <h4 class="text-sm font-bold text-white font-mono uppercase tracking-wider">Flujo de Caja Real (Cash Flow)</h4>
+            <div class="overflow-x-auto text-xs">
+              <table class="w-full text-left border-collapse">
+                <thead class="bg-slate-950 text-slate-400 font-mono uppercase border-b border-white/10">
+                  <tr>
+                    <th class="p-3">Flujo de Fondos</th>
+                    <th class="p-3 text-right">Ingreso ($)</th>
+                    <th class="p-3 text-right">Egreso ($)</th>
+                    <th class="p-3 text-right">Neto ($)</th>
+                  </tr>
+                </thead>
+                <tbody class="font-mono divide-y divide-white/5">
+                  <tr>
+                    <td class="p-3">Actividades Operativas (Ventas, Compras, Gastos, Sueldos)</td>
+                    <td id="cfOpIng" class="p-3 text-right text-emerald-400">$0</td>
+                    <td id="cfOpEg" class="p-3 text-right text-rose-400">$0</td>
+                    <td id="cfOpNet" class="p-3 text-right">$0</td>
+                  </tr>
+                  <tr>
+                    <td class="p-3">Actividades de Inversión (Compra de Equipamiento)</td>
+                    <td id="cfInvIng" class="p-3 text-right text-emerald-400">$0</td>
+                    <td id="cfInvEg" class="p-3 text-right text-rose-400">$0</td>
+                    <td id="cfInvNet" class="p-3 text-right">$0</td>
+                  </tr>
+                  <tr>
+                    <td class="p-3">Actividades de Financiación (Deudas de Capital)</td>
+                    <td id="cfFinIng" class="p-3 text-right text-emerald-400">$0</td>
+                    <td id="cfFinEg" class="p-3 text-right text-rose-400">$0</td>
+                    <td id="cfFinNet" class="p-3 text-right">$0</td>
+                  </tr>
+                  <tr class="bg-slate-900/60 font-bold">
+                    <td class="p-3 text-white">VARIACIÓN NETA DE CAJA (Flujo Neto Total)</td>
+                    <td id="cfTotalIng" class="p-3 text-right text-emerald-400">$0</td>
+                    <td id="cfTotalEg" class="p-3 text-right text-rose-400">$0</td>
+                    <td id="cfTotalNet" class="p-3 text-right text-orange-400 font-bold">$0</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Diagnóstico de Salud Financiera -->
+          <div class="glass-panel p-6 space-y-4">
+            <h4 class="text-sm font-bold text-white font-mono uppercase tracking-wider">🩺 Diagnóstico de Salud</h4>
+            <div id="financeHealthStatus" class="space-y-3 text-xs text-slate-300">
+              <!-- Diagnóstico generado por JS -->
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -483,12 +670,15 @@
         <div>
           <label class="block font-bold text-slate-300 mb-1">Categoría</label>
           <select id="finCategory" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
-            <option value="sales">Ventas</option>
-            <option value="inventory">Insumos</option>
-            <option value="services">Servicios (Luz/Gas/Agua)</option>
-            <option value="salaries">Sueldos</option>
-            <option value="marketing">Marketing</option>
-            <option value="equipment">Equipamiento</option>
+            <option value="sales">Ventas (Ingreso)</option>
+            <option value="inventory">Insumos / Materias Primas (Costo/COGS)</option>
+            <option value="services">Servicios (Luz/Gas/Agua) (Gasto)</option>
+            <option value="salaries">Sueldos de Personal (Gasto)</option>
+            <option value="marketing">Marketing y Publicidad (Gasto)</option>
+            <option value="equipment">Equipamiento (Inversión)</option>
+            <option value="taxes">Impuestos y Tasas (Gasto/Impuesto)</option>
+            <option value="debts">Deudas (Gasto de interés / Financiación)</option>
+            <option value="other">Otros Gastos/Ingresos</option>
           </select>
         </div>
         <div>

@@ -458,6 +458,9 @@ const FlunaAdmin = {
         </td>
       </tr>
     `).join('');
+
+    // Calcular y renderizar estados contables profesionales (P&L / Cash Flow / Salud)
+    this.calculateAndRenderFinancials();
   },
 
   async handleSaveFinance(e) {
@@ -788,6 +791,351 @@ const FlunaAdmin = {
 
   removeRecipeRow(rowId) {
     document.getElementById(rowId)?.remove();
+  },
+
+  // --- SOLAPAS DE SECCIÓN FINANZAS ---
+  switchFinTab(tab) {
+    const isReg = tab === 'registro';
+    // Clases de Botones
+    document.getElementById('btnFinTabRegistro').classList.toggle('border-orange-500', isReg);
+    document.getElementById('btnFinTabRegistro').classList.toggle('text-orange-400', isReg);
+    document.getElementById('btnFinTabRegistro').classList.toggle('font-bold', isReg);
+    document.getElementById('btnFinTabRegistro').classList.toggle('border-transparent', !isReg);
+    document.getElementById('btnFinTabRegistro').classList.toggle('text-slate-400', !isReg);
+
+    document.getElementById('btnFinTabMetricas').classList.toggle('border-orange-500', !isReg);
+    document.getElementById('btnFinTabMetricas').classList.toggle('text-orange-400', !isReg);
+    document.getElementById('btnFinTabMetricas').classList.toggle('font-bold', !isReg);
+    document.getElementById('btnFinTabMetricas').classList.toggle('border-transparent', isReg);
+    document.getElementById('btnFinTabMetricas').classList.toggle('text-slate-400', isReg);
+
+    // Contenedores
+    document.getElementById('finTabRegistro').classList.toggle('hidden', !isReg);
+    document.getElementById('finTabMetricas').classList.toggle('hidden', isReg);
+
+    if (!isReg) {
+      this.calculateAndRenderFinancials();
+      this.renderFinancesCharts();
+    }
+  },
+
+  // --- MODELADO FINANCIERO PROFESIONAL (P&L, EBITDA, CASH FLOW Y SALUD CONTABLE) ---
+  calculateAndRenderFinancials() {
+    // Ingresos
+    const ordersRevenue = this.state.orders
+      .filter(o => o.status === 'Aprobada' || o.status === 'Entregado' || o.payment_status === 'approved')
+      .reduce((sum, o) => sum + Number(o.total_amount), 0);
+    const manualIncome = this.state.finances
+      .filter(f => f.type === 'income')
+      .reduce((sum, f) => sum + Number(f.amount), 0);
+    const totalRevenue = ordersRevenue + manualIncome;
+
+    // COGS
+    const manualCogs = this.state.finances
+      .filter(f => f.type === 'expense' && f.category === 'inventory')
+      .reduce((sum, f) => sum + Number(f.amount), 0);
+    const purchasesCogs = this.state.purchases
+      .reduce((sum, p) => sum + Number(p.total_cost), 0);
+    const totalCogs = manualCogs + purchasesCogs;
+
+    // Gross Profit
+    const grossProfit = totalRevenue - totalCogs;
+    const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+
+    // Gastos Operativos (Opex)
+    const opex = this.state.finances
+      .filter(f => f.type === 'expense' && ['services', 'salaries', 'marketing', 'other'].includes(f.category))
+      .reduce((sum, f) => sum + Number(f.amount), 0);
+
+    // EBITDA
+    const ebitda = grossProfit - opex;
+    const ebitdaMargin = totalRevenue > 0 ? (ebitda / totalRevenue) * 100 : 0;
+
+    // Equipamiento (CapEx)
+    const equipmentCapex = this.state.finances
+      .filter(f => f.type === 'expense' && f.category === 'equipment')
+      .reduce((sum, f) => sum + Number(f.amount), 0);
+
+    // Depreciaciones (Amortización del 20% del equipamiento)
+    const depreciation = equipmentCapex * 0.20;
+
+    // Gastos Financieros (Deudas)
+    const financialExpenses = this.state.finances
+      .filter(f => f.type === 'expense' && f.category === 'debts')
+      .reduce((sum, f) => sum + Number(f.amount), 0);
+
+    // Impuestos
+    const taxes = this.state.finances
+      .filter(f => f.type === 'expense' && f.category === 'taxes')
+      .reduce((sum, f) => sum + Number(f.amount), 0);
+
+    // Utilidad Neta
+    const netProfit = ebitda - depreciation - financialExpenses - taxes;
+    const netMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+
+    // --- Rellenar Tarjetas KPI ---
+    const kpiIng = document.getElementById('finKpiIngresos');
+    const kpiCogs = document.getElementById('finKpiCogs');
+    const kpiImp = document.getElementById('finKpiImpuestos');
+    const kpiDeu = document.getElementById('finKpiDeudas');
+    const kpiMar = document.getElementById('finKpiMargenBruto');
+    const kpiNet = document.getElementById('finKpiUtilidadNeta');
+
+    if (kpiIng) kpiIng.innerText = '$' + totalRevenue.toLocaleString('es-AR', {minimumFractionDigits: 2});
+    if (kpiCogs) kpiCogs.innerText = '$' + totalCogs.toLocaleString('es-AR', {minimumFractionDigits: 2});
+    if (kpiImp) kpiImp.innerText = '$' + taxes.toLocaleString('es-AR', {minimumFractionDigits: 2});
+    if (kpiDeu) kpiDeu.innerText = '$' + financialExpenses.toLocaleString('es-AR', {minimumFractionDigits: 2});
+    if (kpiMar) kpiMar.innerText = grossMargin.toFixed(1) + '%';
+    if (kpiNet) kpiNet.innerText = '$' + netProfit.toLocaleString('es-AR', {minimumFractionDigits: 2});
+
+    // --- Rellenar Tabla P&L ---
+    const updatePlRow = (valId, pctId, value) => {
+      const valEl = document.getElementById(valId);
+      const pctEl = document.getElementById(pctId);
+      if (valEl) valEl.innerText = '$' + value.toLocaleString('es-AR', {minimumFractionDigits: 2});
+      if (pctEl) {
+        const pct = totalRevenue > 0 ? (value / totalRevenue) * 100 : 0;
+        pctEl.innerText = pct.toFixed(1) + '%';
+      }
+    };
+
+    const plIngresosEl = document.getElementById('plIngresos');
+    if (plIngresosEl) plIngresosEl.innerText = '$' + totalRevenue.toLocaleString('es-AR', {minimumFractionDigits: 2});
+
+    updatePlRow('plCogs', 'plCogsPct', totalCogs);
+    updatePlRow('plUtilidadBruta', 'plUtilidadBrutaPct', grossProfit);
+    updatePlRow('plGastosOpe', 'plGastosOpePct', opex);
+    updatePlRow('plEbitda', 'plEbitdaPct', ebitda);
+    updatePlRow('plDepreciacion', 'plDepreciacionPct', depreciation);
+    updatePlRow('plGastosFin', 'plGastosFinPct', financialExpenses);
+    updatePlRow('plImpuestos', 'plImpuestosPct', taxes);
+
+    const plUtilidadNetaEl = document.getElementById('plUtilidadNeta');
+    const plUtilidadNetaPctEl = document.getElementById('plUtilidadNetaPct');
+    if (plUtilidadNetaEl) plUtilidadNetaEl.innerText = '$' + netProfit.toLocaleString('es-AR', {minimumFractionDigits: 2});
+    if (plUtilidadNetaPctEl) plUtilidadNetaPctEl.innerText = netMargin.toFixed(1) + '%';
+
+    // --- Rellenar Cash Flow ---
+    const opInflow = totalRevenue;
+    const opOutflow = totalCogs + opex + taxes;
+    const opNet = opInflow - opOutflow;
+
+    const invInflow = 0;
+    const invOutflow = equipmentCapex;
+    const invNet = invInflow - invOutflow;
+
+    const finInflow = this.state.finances
+      .filter(f => f.type === 'income' && f.category === 'debts')
+      .reduce((sum, f) => sum + Number(f.amount), 0);
+    const finOutflow = financialExpenses;
+    const finNet = finInflow - finOutflow;
+
+    const cashFlowNet = opNet + invNet + finNet;
+
+    const cfOpIngEl = document.getElementById('cfOpIng');
+    const cfOpEgEl = document.getElementById('cfOpEg');
+    const cfOpNetEl = document.getElementById('cfOpNet');
+    if (cfOpIngEl) cfOpIngEl.innerText = '$' + opInflow.toLocaleString('es-AR');
+    if (cfOpEgEl) cfOpEgEl.innerText = '$' + opOutflow.toLocaleString('es-AR');
+    if (cfOpNetEl) cfOpNetEl.innerText = '$' + opNet.toLocaleString('es-AR');
+
+    const cfInvIngEl = document.getElementById('cfInvIng');
+    const cfInvEgEl = document.getElementById('cfInvEg');
+    const cfInvNetEl = document.getElementById('cfInvNet');
+    if (cfInvIngEl) cfInvIngEl.innerText = '$' + invInflow.toLocaleString('es-AR');
+    if (cfInvEgEl) cfInvEgEl.innerText = '$' + invOutflow.toLocaleString('es-AR');
+    if (cfInvNetEl) cfInvNetEl.innerText = '$' + invNet.toLocaleString('es-AR');
+
+    const cfFinIngEl = document.getElementById('cfFinIng');
+    const cfFinEgEl = document.getElementById('cfFinEg');
+    const cfFinNetEl = document.getElementById('cfFinNet');
+    if (cfFinIngEl) cfFinIngEl.innerText = '$' + finInflow.toLocaleString('es-AR');
+    if (cfFinEgEl) cfFinEgEl.innerText = '$' + finOutflow.toLocaleString('es-AR');
+    if (cfFinNetEl) cfFinNetEl.innerText = '$' + finNet.toLocaleString('es-AR');
+
+    const cfTotalIngEl = document.getElementById('cfTotalIng');
+    const cfTotalEgEl = document.getElementById('cfTotalEg');
+    if (cfTotalIngEl) cfTotalIngEl.innerText = '$' + (opInflow + invInflow + finInflow).toLocaleString('es-AR');
+    if (cfTotalEgEl) cfTotalEgEl.innerText = '$' + (opOutflow + invOutflow + finOutflow).toLocaleString('es-AR');
+    
+    const cfTotalNetEl = document.getElementById('cfTotalNet');
+    if (cfTotalNetEl) {
+      cfTotalNetEl.innerText = '$' + cashFlowNet.toLocaleString('es-AR');
+      cfTotalNetEl.className = `p-3 text-right font-bold ${cashFlowNet >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+    }
+
+    // --- Diagnóstico de Salud Financiera ---
+    const healthContainer = document.getElementById('financeHealthStatus');
+    if (healthContainer) {
+      let score = 0;
+      let advices = [];
+
+      // Evaluar Utilidad Neta
+      if (netProfit > 0) {
+        score += 35;
+        advices.push(`<li>🟢 <strong>Rentabilidad Positiva:</strong> FLuna genera ganancias netas de $${netProfit.toLocaleString('es-AR')}. ¡Buen rendimiento!</li>`);
+      } else {
+        advices.push(`<li>🔴 <strong>Pérdida Neta:</strong> La operación actual arroja pérdidas netas. Revisa los costos fijos y precios.</li>`);
+      }
+
+      // Evaluar Margen Bruto
+      if (grossMargin >= 60) {
+        score += 35;
+        advices.push(`<li>🟢 <strong>Margen Bruto Excelente (${grossMargin.toFixed(1)}%):</strong> El costo de ingredientes está sumamente optimizado respecto al precio de venta.</li>`);
+      } else if (grossMargin >= 40) {
+        score += 20;
+        advices.push(`<li>🟡 <strong>Margen Bruto Aceptable (${grossMargin.toFixed(1)}%):</strong> Monitorea los precios de los ingredientes para subir el rendimiento.</li>`);
+      } else {
+        advices.push(`<li>🔴 <strong>Margen Bruto Crítico (${grossMargin.toFixed(1)}%):</strong> El costo de mercadería es demasiado alto. Considera subir precios o renegociar con proveedores.</li>`);
+      }
+
+      // Evaluar Cash Flow
+      if (cashFlowNet > 0) {
+        score += 30;
+        advices.push(`<li>🟢 <strong>Flujo de Caja Saludable:</strong> Entra más efectivo del que sale. FLuna cuenta con liquidez para cubrir emergencias.</li>`);
+      } else {
+        advices.push(`<li>🔴 <strong>Déficit de Efectivo:</strong> Flujo neto negativo ($${cashFlowNet.toLocaleString('es-AR')}). Cuidado con la liquidez a corto plazo.</li>`);
+      }
+
+      let ratingClass = 'text-rose-400';
+      let ratingText = 'Crítico';
+      if (score >= 80) {
+        ratingClass = 'text-emerald-400';
+        ratingText = 'Excelente / Saludable';
+      } else if (score >= 50) {
+        ratingClass = 'text-yellow-400';
+        ratingText = 'Estable / Monitorear';
+      }
+
+      healthContainer.innerHTML = `
+        <div class="p-3 bg-slate-950 rounded-xl border border-white/5 space-y-1">
+          <div class="text-[10px] text-slate-400 font-mono">ÍNDICE DE SALUD</div>
+          <div class="text-lg font-black ${ratingClass} font-mono">${score}% (${ratingText})</div>
+        </div>
+        <ul class="space-y-2 list-none p-0 text-[11px] leading-relaxed">
+          ${advices.join('')}
+        </ul>
+      `;
+    }
+  },
+
+  // --- RENDERIZADO DE GRÁFICOS CONTABLES ---
+  renderFinancesCharts() {
+    if (typeof Chart === 'undefined') return;
+
+    // 1. Chart Evolución: Barras comparativas de ingresos vs egresos de los últimos 7 días
+    const ctxEvolucion = document.getElementById('chartFinEvolucion');
+    if (ctxEvolucion) {
+      if (this.state.charts.finEvolucion) this.state.charts.finEvolucion.destroy();
+
+      const last7Days = Array.from({length: 7}, (_, i) => {
+        const d = new Date();
+        d.setDate(d.getDate() - (6 - i));
+        return d.toISOString().split('T')[0];
+      });
+
+      const incomeData = last7Days.map(dateStr => {
+        const manualInc = this.state.finances
+          .filter(f => f.date === dateStr && f.type === 'income')
+          .reduce((sum, f) => sum + Number(f.amount), 0);
+        const ordersInc = this.state.orders
+          .filter(o => o.created_at.startsWith(dateStr) && (o.status === 'Aprobada' || o.status === 'Entregado'))
+          .reduce((sum, o) => sum + Number(o.total_amount), 0);
+        return manualInc + ordersInc;
+      });
+
+      const expenseData = last7Days.map(dateStr => {
+        const manualExp = this.state.finances
+          .filter(f => f.date === dateStr && f.type === 'expense')
+          .reduce((sum, f) => sum + Number(f.amount), 0);
+        const purchasesExp = this.state.purchases
+          .filter(p => p.created_at.startsWith(dateStr))
+          .reduce((sum, p) => sum + Number(p.total_cost), 0);
+        return manualExp + purchasesExp;
+      });
+
+      this.state.charts.finEvolucion = new Chart(ctxEvolucion, {
+        type: 'bar',
+        data: {
+          labels: last7Days.map(d => d.slice(5)),
+          datasets: [
+            {
+              label: 'Ingresos ($)',
+              data: incomeData,
+              backgroundColor: '#22c55e',
+              borderRadius: 4
+            },
+            {
+              label: 'Egresos ($)',
+              data: expenseData,
+              backgroundColor: '#ef4444',
+              borderRadius: 4
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#94a3b8' } } },
+          scales: {
+            x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+            y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } }
+          }
+        }
+      });
+    }
+
+    // 2. Chart Distribución: Doughnut de gastos distribuidos por categoría
+    const ctxGastos = document.getElementById('chartFinGastos');
+    if (ctxGastos) {
+      if (this.state.charts.finGastos) this.state.charts.finGastos.destroy();
+
+      const categories = {
+        'Insumos': this.state.finances.filter(f => f.type === 'expense' && f.category === 'inventory').reduce((sum, f) => sum + Number(f.amount), 0) + 
+                   this.state.purchases.reduce((sum, p) => sum + Number(p.total_cost), 0),
+        'Servicios': this.state.finances.filter(f => f.type === 'expense' && f.category === 'services').reduce((sum, f) => sum + Number(f.amount), 0),
+        'Sueldos': this.state.finances.filter(f => f.type === 'expense' && f.category === 'salaries').reduce((sum, f) => sum + Number(f.amount), 0),
+        'Marketing': this.state.finances.filter(f => f.type === 'expense' && f.category === 'marketing').reduce((sum, f) => sum + Number(f.amount), 0),
+        'Equipamiento': this.state.finances.filter(f => f.type === 'expense' && f.category === 'equipment').reduce((sum, f) => sum + Number(f.amount), 0),
+        'Impuestos': this.state.finances.filter(f => f.type === 'expense' && f.category === 'taxes').reduce((sum, f) => sum + Number(f.amount), 0),
+        'Deudas': this.state.finances.filter(f => f.type === 'expense' && f.category === 'debts').reduce((sum, f) => sum + Number(f.amount), 0),
+        'Otros': this.state.finances.filter(f => f.type === 'expense' && f.category === 'other').reduce((sum, f) => sum + Number(f.amount), 0)
+      };
+
+      const labels = Object.keys(categories).filter(cat => categories[cat] > 0);
+      const data = labels.map(cat => categories[cat]);
+
+      this.state.charts.finGastos = new Chart(ctxGastos, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: data,
+            backgroundColor: [
+              '#e11d48',
+              '#3b82f6',
+              '#f59e0b',
+              '#8b5cf6',
+              '#ec4899',
+              '#f43f5e',
+              '#64748b',
+              '#14b8a6'
+            ],
+            borderWidth: 0
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: { color: '#94a3b8', font: { size: 10 } }
+            }
+          }
+        }
+      });
+    }
   }
 };
 
