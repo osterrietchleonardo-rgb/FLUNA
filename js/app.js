@@ -28,6 +28,16 @@ const FlunaApp = {
   },
 
   init() {
+    // Cargar carrito persistido de la sesión anterior
+    const savedCart = localStorage.getItem('fluna_cart');
+    if (savedCart) {
+      try {
+        this.state.cart = JSON.parse(savedCart);
+      } catch (e) {
+        this.state.cart = [];
+      }
+    }
+
     // Inicializar pasarela de pagos
     if (window.FlunaPayments) FlunaPayments.init();
 
@@ -39,6 +49,9 @@ const FlunaApp = {
 
     // Inicializar autenticación y sesión
     this.initAuth();
+
+    // Iniciar suscripciones en tiempo real
+    this.initRealtimeSubscriptions();
 
     // Inicializar PWA service worker y prompt
     this.initPWA();
@@ -97,6 +110,27 @@ const FlunaApp = {
           return;
         }
         cartDrawer.classList.add('translate-x-full');
+
+        // --- CONTROL DE LOGIN OBLIGATORIO ---
+        if (!this.state.customer.id) {
+          // Guardar estado del carrito pendiente
+          localStorage.setItem('fluna_pending_cart', JSON.stringify(this.state.cart));
+          localStorage.setItem('fluna_pending_checkout', 'true');
+
+          // Mostrar mensaje de aviso
+          const authNotice = document.getElementById('authNotice');
+          if (authNotice) {
+            authNotice.innerText = '¡Casi listo! Registrate o iniciá sesión para completar tu pedido de FLuna 🍕';
+            authNotice.classList.remove('hidden');
+          }
+
+          // Abrir modal de Login
+          this.toggleAuthMode('login');
+          document.getElementById('authModal').classList.remove('hidden');
+          document.getElementById('authModal').classList.add('flex');
+          return;
+        }
+
         checkoutModal.classList.remove('hidden');
         checkoutModal.classList.add('flex');
         this.fillCheckoutFormFields();
@@ -330,6 +364,9 @@ const FlunaApp = {
   },
 
   updateCartUI() {
+    // Guardar en almacenamiento local
+    localStorage.setItem('fluna_cart', JSON.stringify(this.state.cart));
+
     const cartBadge = document.getElementById('cartBadge');
     const cartItemsContainer = document.getElementById('cartItems');
     const cartTotalEl = document.getElementById('cartTotal');
@@ -641,6 +678,11 @@ const FlunaApp = {
         this.renderChatMessages();
       }
     });
+
+    // Escuchar cambios en la base de productos
+    FlunaDB.subscribeProducts(() => {
+      this.loadProducts();
+    });
   },
 
   // --- PWA INSTALACIÓN ---
@@ -693,6 +735,29 @@ const FlunaApp = {
         this.updateAuthUI(true);
         this.loadCustomerOrders();
         this.loadChatMessages();
+
+        // Ocultar aviso de autenticación si existe
+        document.getElementById('authNotice')?.classList.add('hidden');
+
+        // --- RESTAURACIÓN DE COMPRA PENDIENTE ---
+        if (localStorage.getItem('fluna_pending_checkout') === 'true') {
+          const pendingCart = localStorage.getItem('fluna_pending_cart');
+          if (pendingCart) {
+            this.state.cart = JSON.parse(pendingCart);
+            this.updateCartUI();
+          }
+          localStorage.removeItem('fluna_pending_checkout');
+          localStorage.removeItem('fluna_pending_cart');
+
+          setTimeout(() => {
+            const checkoutModal = document.getElementById('checkoutModal');
+            if (checkoutModal) {
+              checkoutModal.classList.remove('hidden');
+              checkoutModal.classList.add('flex');
+              this.fillCheckoutFormFields();
+            }
+          }, 400);
+        }
       } else {
         this.state.customer = { id: '', name: '', phone: '', address: '', email: '' };
         this.updateAuthUI(false);

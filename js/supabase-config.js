@@ -179,6 +179,17 @@ const FlunaDB = {
       .subscribe();
   },
 
+  subscribeProducts(onProductChange) {
+    const client = getSupabaseClient();
+    if (!client) return null;
+    return client
+      .channel('public:products')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, payload => {
+        onProductChange(payload);
+      })
+      .subscribe();
+  },
+
   // --- AUTENTICACIÓN (SUPABASE AUTH) ---
   async signUp(email, password, fullName) {
     const client = getSupabaseClient();
