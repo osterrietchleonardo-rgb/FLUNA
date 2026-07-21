@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>FLuna Pizzería | Ultra Premium PWA</title>
+  
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="Pizzería FLuna - Pizzas artesanales de masa madre, empanadas premium y delivery online con pago seguro Mercado Pago.">
+  <meta name="theme-color" content="#E96D25">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./brand/logo_fluna.jpg">
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            fluna: {
+              orange: '#E96D25',
+              dark: '#000000',
+              surface: '#030712'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Custom CSS Design System -->
+  <link rel="stylesheet" href="./css/styles.css">
+
+  <!-- External SDKs -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://sdk.mercadopago.com/js/v2"></script>
+</head>
+<body class="tech-bg text-slate-100 min-h-screen flex flex-col justify-between selection:bg-orange-500 selection:text-white">
+
+  <!-- Glow Spots Ambientales -->
+  <div class="glow-spot glow-top-right"></div>
+  <div class="glow-spot glow-bottom-left"></div>
+
+  <!-- Header / Navigation Bar -->
+  <header class="sticky top-0 z-40 glass-header px-4 py-3 border-b border-white/10">
+    <div class="max-w-6xl mx-auto flex items-center justify-between">
+      
+      <!-- Brand Logo & Name -->
+      <a href="#" class="flex items-center gap-3 group">
+        <div class="relative w-11 h-11 rounded-xl overflow-hidden border border-orange-500/40 p-0.5 bg-black">
+          <img src="./brand/logo_fluna.jpg" alt="FLuna Logo" class="w-full h-full object-cover rounded-lg group-hover:scale-110 transition duration-300">
+        </div>
+        <div>
+          <h1 class="text-xl font-black tracking-tight text-white flex items-center gap-1.5">
+            FLUNA <span class="text-orange-500 text-xs font-mono px-2 py-0.5 rounded bg-orange-500/10 border border-orange-500/30">PWA</span>
+          </h1>
+          <p class="text-[10px] text-slate-400 font-mono tracking-wider">PIZZERÍA ARTESANAL</p>
+        </div>
+      </a>
+
+      <!-- Header Actions -->
+      <div class="flex items-center gap-2">
+        <!-- PWA Install Button -->
+        <button id="pwaInstallBtn" class="hidden btn-fluna-outline py-1.5 px-3 text-xs flex items-center gap-1.5 animate-pulse">
+          <i class="fa-solid fa-download"></i> <span class="hidden sm:inline">Instalar App</span>
+        </button>
+
+        <!-- Tracker / Orders Button -->
+        <button id="accountBtn" class="bg-slate-900/80 hover:bg-slate-800 text-slate-200 p-2.5 rounded-xl border border-white/10 text-xs font-medium flex items-center gap-2 transition">
+          <i class="fa-solid fa-clock-rotate-left text-orange-400"></i>
+          <span class="hidden md:inline font-mono">Mis Pedidos</span>
+        </button>
+
+        <!-- Cart Drawer Trigger Button -->
+        <button id="cartBtn" class="btn-fluna py-2 px-3.5 text-xs flex items-center gap-2 relative">
+          <i class="fa-solid fa-basket-shopping text-sm"></i>
+          <span class="hidden sm:inline">Carrito</span>
+          <span id="cartBadge" class="hidden bg-white text-orange-600 font-extrabold font-mono text-[10px] px-1.5 py-0.2 rounded-full border border-orange-500">0</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main App View -->
+  <main class="max-w-6xl mx-auto px-4 py-8 flex-1 space-y-8 relative z-10 w-full">
+    
+    <!-- Hero Banner -->
+    <section class="glass-panel-glow p-8 md:p-12 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
+      <div class="space-y-4 max-w-xl text-center md:text-left z-10">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-mono font-bold">
+          <i class="fa-solid fa-fire"></i> HORNO DE PIEDRA 450°C
+        </div>
+        <h2 class="text-3xl md:text-5xl font-black text-white leading-tight">
+          PIZZAS NEÓN <br><span class="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-500">SABOR ULTRA PREMIUM</span>
+        </h2>
+        <p class="text-slate-300 text-sm md:text-base leading-relaxed">
+          Masa madre fermentada 48hs, ingredientes seleccionados de primera calidad y envío veloz rastreable en tiempo real.
+        </p>
+      </div>
+
+      <div class="relative w-48 h-48 md:w-64 md:h-64 animate-float">
+        <img src="./brand/logo_fluna.jpg" alt="FLuna Brand Logo" class="w-full h-full object-cover rounded-3xl shadow-2xl border-2 border-orange-500/40">
+      </div>
+    </section>
+
+    <!-- Categories Filter Bar -->
+    <section class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+      <button data-category="Todas" class="cat-btn bg-orange-500 text-white shadow-lg py-2 px-5 rounded-xl text-xs font-bold whitespace-nowrap transition">
+        <i class="fa-solid fa-border-all mr-1.5"></i> Todas
+      </button>
+      <button data-category="Pizzas" class="cat-btn bg-slate-900/60 text-slate-300 py-2 px-5 rounded-xl text-xs font-bold whitespace-nowrap hover:text-white transition">
+        <i class="fa-solid fa-pizza-slice mr-1.5 text-orange-400"></i> Pizzas
+      </button>
+      <button data-category="Empanadas" class="cat-btn bg-slate-900/60 text-slate-300 py-2 px-5 rounded-xl text-xs font-bold whitespace-nowrap hover:text-white transition">
+        <i class="fa-solid fa-cloud mr-1.5 text-amber-400"></i> Empanadas
+      </button>
+      <button data-category="Bebidas" class="cat-btn bg-slate-900/60 text-slate-300 py-2 px-5 rounded-xl text-xs font-bold whitespace-nowrap hover:text-white transition">
+        <i class="fa-solid fa-wine-bottle mr-1.5 text-sky-400"></i> Bebidas
+      </button>
+      <button data-category="Postres" class="cat-btn bg-slate-900/60 text-slate-300 py-2 px-5 rounded-xl text-xs font-bold whitespace-nowrap hover:text-white transition">
+        <i class="fa-solid fa-ice-cream mr-1.5 text-pink-400"></i> Postres
+      </button>
+      <button data-category="Combos" class="cat-btn bg-slate-900/60 text-slate-300 py-2 px-5 rounded-xl text-xs font-bold whitespace-nowrap hover:text-white transition">
+        <i class="fa-solid fa-bolt mr-1.5 text-yellow-400"></i> Combos
+      </button>
+    </section>
+
+    <!-- Product Catalog Grid -->
+    <section id="catalogGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <!-- Carga dinámica vía app.js -->
+    </section>
+  </main>
+
+  <!-- MODAL: Personalizar Producto -->
+  <div id="productModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-lg overflow-hidden border border-orange-500/30 flex flex-col max-h-[90vh]">
+      
+      <!-- Modal Header -->
+      <div class="relative h-48 bg-slate-900">
+        <img id="modalProdImg" src="" class="w-full h-full object-cover">
+        <button id="closeProductModal" class="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/70 text-white flex items-center justify-center hover:bg-rose-600 transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 overflow-y-auto space-y-4 flex-1">
+        <div>
+          <h3 id="modalProdTitle" class="text-2xl font-black text-white"></h3>
+          <p id="modalProdDesc" class="text-xs text-slate-400 mt-1"></p>
+          <div id="modalProdPrice" class="text-2xl font-extrabold font-mono text-orange-400 mt-2"></div>
+        </div>
+
+        <!-- Opción Tamaño -->
+        <div class="space-y-2 pt-2 border-t border-white/10">
+          <label class="text-xs font-bold text-slate-300 uppercase tracking-wider block">Tamaño</label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="glass-card p-3 flex items-center gap-2 cursor-pointer text-xs font-medium hover:border-orange-500">
+              <input type="radio" name="prodSize" value="Mediana" checked class="accent-orange-500">
+              <span>Mediana (6 Porciones)</span>
+            </label>
+            <label class="glass-card p-3 flex items-center gap-2 cursor-pointer text-xs font-medium hover:border-orange-500">
+              <input type="radio" name="prodSize" value="Familiar (8 Porciones)" class="accent-orange-500">
+              <span>Familiar (+$2.500)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Opción Extras -->
+        <div class="space-y-2">
+          <label class="text-xs font-bold text-slate-300 uppercase tracking-wider block">Extras</label>
+          <label class="glass-card p-3 flex items-center justify-between cursor-pointer text-xs font-medium hover:border-orange-500">
+            <div class="flex items-center gap-2">
+              <input type="checkbox" id="optExtraCheese" class="accent-orange-500">
+              <span>Queso Muzzarella Extra (+ $1.200)</span>
+            </div>
+          </label>
+        </div>
+
+        <!-- Notas -->
+        <div class="space-y-1">
+          <label class="text-xs font-bold text-slate-300 uppercase tracking-wider block">Indicaciones Especiales</label>
+          <input type="text" id="modalSpecialNotes" placeholder="Ej: Sin cebolla, bien cocida..." class="w-full bg-slate-900/90 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500">
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 bg-slate-950 border-t border-white/10">
+        <button id="btnAddToCartFromModal" class="w-full btn-fluna py-3 flex items-center justify-center gap-2 text-sm font-bold">
+          <i class="fa-solid fa-cart-plus"></i> Agregar al Carrito
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- DRAWER: Carrito de Compras -->
+  <aside id="cartDrawer" class="fixed top-0 right-0 z-50 w-full max-w-md h-full glass-header border-l border-white/10 flex flex-col transform translate-x-full transition-transform duration-300">
+    <div class="p-4 border-b border-white/10 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-basket-shopping text-orange-500"></i>
+        <h3 class="text-lg font-bold text-white">Tu Carrito FLuna</h3>
+      </div>
+      <button id="closeCartBtn" class="text-slate-400 hover:text-white p-2 text-lg">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- Lista de Items en Carrito -->
+    <div id="cartItems" class="flex-1 overflow-y-auto p-4 space-y-3">
+      <!-- Carga dinámica app.js -->
+    </div>
+
+    <!-- Footer Carrito -->
+    <div class="p-4 bg-slate-950 border-t border-white/10 space-y-4">
+      <div class="flex justify-between items-center text-sm font-mono">
+        <span class="text-slate-400">TOTAL:</span>
+        <span id="cartTotal" class="text-2xl font-black text-orange-400">$0</span>
+      </div>
+
+      <button id="btnCheckout" class="w-full btn-fluna py-3.5 flex items-center justify-center gap-2 font-bold text-sm shadow-xl">
+        <span>Iniciar Checkout</span> <i class="fa-solid fa-arrow-right"></i>
+      </button>
+    </div>
+  </aside>
+
+  <!-- MODAL: Checkout / Formulario de Envió y Pago -->
+  <div id="checkoutModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-lg p-6 space-y-6 max-h-[90vh] overflow-y-auto border border-orange-500/40">
+      <div class="flex items-center justify-between border-b border-white/10 pb-3">
+        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-truck-fast text-orange-500"></i> Finalizar Pedido
+        </h3>
+        <button id="closeCheckoutModal" class="text-slate-400 hover:text-white">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="checkoutForm" class="space-y-4 text-xs">
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Nombre Completo *</label>
+          <input type="text" id="custName" required placeholder="Tu nombre" class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-orange-500 focus:outline-none">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Teléfono / WhatsApp *</label>
+            <input type="tel" id="custPhone" required placeholder="11 2345 6789" class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-orange-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Modalidad</label>
+            <select id="deliveryType" class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-orange-500 focus:outline-none">
+              <option value="delivery">Envío a Domicilio</option>
+              <option value="pickup">Retiro en Local</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Dirección de Entrega *</label>
+          <input type="text" id="custAddress" required placeholder="Calle 123, Depto 4B" class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-orange-500 focus:outline-none">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Método de Pago *</label>
+          <select id="paymentMethod" class="w-full bg-slate-900 border border-orange-500/50 rounded-xl p-3 text-orange-400 font-bold focus:border-orange-500 focus:outline-none">
+            <option value="mercadopago">💳 Mercado Pago (Tarjetas, Dinero en cuenta, Pago Fácil)</option>
+            <option value="cash">💵 Efectivo al recibir</option>
+            <option value="transfer">🏦 Transferencia Bancaria Directa</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Aclaraciones</label>
+          <textarea id="orderNotes" rows="2" placeholder="Ej: Timbre no funciona, tocar puerta..." class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-orange-500 focus:outline-none"></textarea>
+        </div>
+
+        <button type="submit" class="w-full btn-fluna py-3.5 font-bold text-sm shadow-lg flex items-center justify-center gap-2">
+          <i class="fa-solid fa-lock"></i> Confirmar y Procesar Pago
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Mercado Pago Gateway -->
+  <div id="paymentModal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-lg hidden items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-md p-2 border border-orange-500/50">
+      <div id="mpBrickContainer">
+        <!-- Renderizado dinámico vía payments.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Tracker de Pedidos & Mi Cuenta -->
+  <div id="trackerModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-2xl p-6 space-y-6 max-h-[90vh] overflow-y-auto border border-orange-500/30">
+      <div class="flex items-center justify-between border-b border-white/10 pb-3">
+        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-location-crosshairs text-orange-500"></i> Estado de tu Pedido en Vivo
+        </h3>
+        <button id="closeTrackerModal" class="text-slate-400 hover:text-white">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div id="trackerContent">
+        <!-- Carga dinámica app.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- WIDGET: Chat Flotante Soporte -->
+  <div class="fixed bottom-6 right-6 z-40">
+    <!-- Chat Toggle Button -->
+    <button id="chatToggleBtn" class="w-14 h-14 rounded-full btn-fluna flex items-center justify-center text-xl shadow-2xl shadow-orange-500/50 hover:scale-110 transition">
+      <i class="fa-solid fa-comments"></i>
+    </button>
+
+    <!-- Chat Box Widget -->
+    <div id="chatWidget" class="hidden absolute bottom-16 right-0 w-80 sm:w-96 glass-panel border border-orange-500/40 shadow-2xl rounded-2xl overflow-hidden flex flex-col h-[400px]">
+      <div class="bg-slate-950 p-3 border-b border-white/10 flex justify-between items-center">
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></div>
+          <span class="text-xs font-bold text-white">Atención FLuna Realtime</span>
+        </div>
+        <button id="closeChatWidget" class="text-slate-400 hover:text-white text-sm"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div id="chatMessages" class="flex-1 p-3 overflow-y-auto space-y-2 bg-slate-900/60">
+        <!-- Carga dinámica app.js -->
+      </div>
+
+      <form id="chatSendForm" class="p-2 bg-slate-950 border-t border-white/10 flex gap-2">
+        <input type="text" id="chatInput" placeholder="Escribe un mensaje..." class="flex-1 bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500">
+        <button type="submit" class="btn-fluna px-3 py-2 text-xs font-bold"><i class="fa-solid fa-paper-plane"></i></button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="glass-header mt-12 py-6 px-4 border-t border-white/10 text-center text-xs text-slate-400 space-y-2">
+    <div class="flex items-center justify-center gap-4">
+      <a href="https://www.instagram.com/fluna_pizzeria/?hl=es" target="_blank" class="hover:text-orange-400 transition flex items-center gap-1.5">
+        <i class="fa-brands fa-instagram text-base"></i> @fluna_pizzeria
+      </a>
+      <span>•</span>
+      <a href="./admin.html" class="hover:text-orange-400 transition font-mono">
+        <i class="fa-solid fa-user-shield"></i> Acceso Admin
+      </a>
+    </div>
+    <p class="font-mono text-[10px] opacity-60">© 2026 FLuna Pizzería. PWA Instalable - Sistema 100% Autónomo Supabase & Mercado Pago.</p>
+  </footer>
+
+  <!-- App Main Scripts -->
+  <script src="./js/supabase-config.js"></script>
+  <script src="./js/payments.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,232 @@
+/* ============================================================
+   FLUNA PIZZERÍA - SISTEMA DE DISEÑO ULTRA PREMIUM (DARK MODE)
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap');
+
+:root {
+  --fluna-orange: #E96D25;
+  --fluna-orange-hover: #f07b34;
+  --fluna-orange-glow: rgba(233, 109, 37, 0.45);
+  --fluna-orange-subtle: rgba(233, 109, 37, 0.12);
+  --fluna-bg: #000000;
+  --fluna-surface: #030712;
+  --fluna-card-bg: rgba(15, 23, 42, 0.65);
+  --fluna-card-border: rgba(255, 255, 255, 0.08);
+  --fluna-card-border-glow: rgba(233, 109, 37, 0.35);
+  --fluna-text-main: #f8fafc;
+  --fluna-text-muted: #94a3b8;
+}
+
+/* Reset Base */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Inter', sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: var(--fluna-bg);
+  color: var(--fluna-text-main);
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Font Classes */
+.font-sans { font-family: 'Inter', sans-serif; }
+.font-mono { font-family: 'JetBrains Mono', monospace; }
+
+/* 1. Malla Tecnológica de Fondo (Tech Grid Background) */
+.tech-bg {
+  background-color: #000000;
+  background-image: 
+    linear-gradient(rgba(233, 109, 37, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(233, 109, 37, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-position: -1px -1px;
+}
+
+/* 2. Resplandores Radial (Glow Spots) */
+.glow-spot {
+  position: fixed;
+  width: 500px;
+  height: 500px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--fluna-orange-glow) 0%, rgba(0, 0, 0, 0) 70%);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.6;
+  filter: blur(50px);
+}
+
+.glow-top-right {
+  top: -150px;
+  right: -150px;
+}
+
+.glow-bottom-left {
+  bottom: -200px;
+  left: -200px;
+}
+
+.glow-center {
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 700px;
+  height: 700px;
+}
+
+/* 3. Glassmorphism Panels */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--fluna-card-border);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+  border-radius: 1rem;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-panel-glow {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--fluna-card-border-glow);
+  box-shadow: 0 0 25px rgba(233, 109, 37, 0.2);
+  border-radius: 1rem;
+}
+
+.glass-card {
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+  border-color: var(--fluna-orange-glow);
+  box-shadow: 0 10px 30px -10px rgba(233, 109, 37, 0.3);
+  transform: translateY(-3px);
+}
+
+.glass-header {
+  background: rgba(3, 7, 18, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--fluna-card-border);
+}
+
+/* 4. Micro-animaciones CSS */
+@keyframes floatAnim {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(233, 109, 37, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(233, 109, 37, 0.75);
+  }
+}
+
+@keyframes shimmerEffect {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-float {
+  animation: floatAnim 4s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2.5s ease-in-out infinite;
+}
+
+.btn-fluna {
+  background: linear-gradient(135deg, #E96D25 0%, #d45913 100%);
+  color: #ffffff;
+  font-weight: 600;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 20px rgba(233, 109, 37, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.btn-fluna:hover {
+  background: linear-gradient(135deg, #f07b34 0%, #E96D25 100%);
+  box-shadow: 0 6px 30px rgba(233, 109, 37, 0.6);
+  transform: translateY(-2px);
+}
+
+.btn-fluna-outline {
+  background: rgba(233, 109, 37, 0.1);
+  color: #E96D25;
+  border: 1px solid var(--fluna-orange);
+  font-weight: 600;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  transition: all 0.25s ease;
+}
+
+.btn-fluna-outline:hover {
+  background: var(--fluna-orange);
+  color: #ffffff;
+  box-shadow: 0 0 20px rgba(233, 109, 37, 0.4);
+}
+
+/* Custom Badges */
+.badge-status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.badge-solicitado { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); }
+.badge-falta-pago { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+.badge-aprobada { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); }
+.badge-cocina { background: rgba(234, 179, 8, 0.2); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4); }
+.badge-terminado { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); }
+.badge-embalando { background: rgba(236, 72, 153, 0.2); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.4); }
+.badge-camino { background: rgba(249, 115, 22, 0.2); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.4); }
+.badge-entregado { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #030712;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(233, 109, 37, 0.4);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--fluna-orange);
+}
+
+/* Kanban Drag & Drop Columns */
+.kanban-column {
+  min-height: 500px;
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 1rem;
+}

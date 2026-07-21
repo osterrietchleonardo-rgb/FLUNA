@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FLuna Admin | Sistema de Gestión Interna</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            fluna: {
+              orange: '#E96D25',
+              dark: '#000000',
+              surface: '#030712'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="./css/styles.css">
+
+  <!-- External SDKs -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="tech-bg text-slate-100 min-h-screen flex flex-col md:flex-row">
+
+  <!-- Ambient Glow Spots -->
+  <div class="glow-spot glow-top-right"></div>
+  <div class="glow-spot glow-bottom-left"></div>
+
+  <!-- Sidebar Navigation -->
+  <aside class="w-full md:w-64 glass-header border-r border-white/10 flex flex-col justify-between z-30 shrink-0">
+    <div class="p-4 space-y-6">
+      
+      <!-- Brand Admin -->
+      <a href="./index.html" class="flex items-center gap-3 group">
+        <div class="w-10 h-10 rounded-xl overflow-hidden border border-orange-500/40 p-0.5 bg-black">
+          <img src="./brand/logo_fluna.jpg" alt="FLuna Logo" class="w-full h-full object-cover rounded-lg">
+        </div>
+        <div>
+          <h2 class="text-base font-black text-white">FLUNA <span class="text-orange-500 font-mono text-xs">ADMIN</span></h2>
+          <p class="text-[10px] text-slate-400 font-mono">GESTIÓN PIZZERÍA</p>
+        </div>
+      </a>
+
+      <!-- Menu Items -->
+      <nav class="space-y-1 text-xs font-semibold">
+        <button data-tab="dashboard" class="admin-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-orange-500/20 text-orange-400 border-r-4 border-orange-500 transition">
+          <i class="fa-solid fa-chart-line text-sm"></i> Dashboard General
+        </button>
+        <button data-tab="kanban" class="admin-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:text-white transition">
+          <i class="fa-solid fa-square-poll-vertical text-sm"></i> Pipeline Pedidos
+        </button>
+        <button data-tab="products" class="admin-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:text-white transition">
+          <i class="fa-solid fa-pizza-slice text-sm"></i> Productos y Menú
+        </button>
+        <button data-tab="finances" class="admin-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:text-white transition">
+          <i class="fa-solid fa-sack-dollar text-sm"></i> Finanzas & Resultados
+        </button>
+        <button data-tab="stock" class="admin-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:text-white transition">
+          <i class="fa-solid fa-boxes-stacked text-sm"></i> Stock Insumos
+        </button>
+        <button data-tab="chat" class="admin-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:text-white transition">
+          <i class="fa-solid fa-headset text-sm"></i> Centro Mensajes
+        </button>
+        <button data-tab="marketing" class="admin-nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:text-white transition">
+          <i class="fa-solid fa-wand-magic-sparkles text-sm"></i> Marketing IA
+        </button>
+      </nav>
+    </div>
+
+    <div class="p-4 border-t border-white/10 text-xs text-slate-400">
+      <a href="./index.html" class="flex items-center gap-2 hover:text-orange-400 transition font-mono">
+        <i class="fa-solid fa-arrow-left"></i> Volver a Vista Cliente
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 p-4 md:p-8 space-y-8 overflow-y-auto relative z-10">
+
+    <!-- Header Section -->
+    <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/10 pb-4">
+      <div>
+        <h1 class="text-2xl font-black text-white">Panel de Control de Producción</h1>
+        <p class="text-xs text-slate-400">Pizzería FLuna • Sistema Sincronizado en Tiempo Real</p>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> SUPABASE REALTIME
+        </span>
+      </div>
+    </header>
+
+    <!-- SECTION 1: DASHBOARD GENERAL -->
+    <section id="section-dashboard" class="admin-section space-y-6">
+      <!-- KPI Metric Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="glass-card p-5 space-y-2">
+          <span class="text-xs text-slate-400 font-mono block">Ventas Aprobadas</span>
+          <div id="kpiTotalSales" class="text-2xl font-black font-mono text-emerald-400">$0</div>
+        </div>
+        <div class="glass-card p-5 space-y-2">
+          <span class="text-xs text-slate-400 font-mono block">Total Pedidos</span>
+          <div id="kpiTotalOrders" class="text-2xl font-black font-mono text-white">0</div>
+        </div>
+        <div class="glass-card p-5 space-y-2">
+          <span class="text-xs text-slate-400 font-mono block">Ganancia Neta</span>
+          <div id="kpiNetProfit" class="text-2xl font-black font-mono text-orange-400">$0</div>
+        </div>
+        <div class="glass-card p-5 space-y-2 relative">
+          <span class="text-xs text-slate-400 font-mono block">Ingredientes Críticos</span>
+          <div id="kpiCriticalStock" class="text-2xl font-black font-mono text-rose-400">0</div>
+          <span id="kpiCriticalStockBadge" class="hidden absolute top-3 right-3 bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full animate-bounce">Alerta</span>
+        </div>
+      </div>
+
+      <!-- Charts Row -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="glass-panel p-6 lg:col-span-2 space-y-4">
+          <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono">Tendencia de Ventas Diarias</h3>
+          <canvas id="chartSalesTrend" height="130"></canvas>
+        </div>
+        <div class="glass-panel p-6 space-y-4">
+          <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono">Estado de Ingresos vs Gastos</h3>
+          <canvas id="chartIncomeExpense" height="180"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: KANBAN BOARD -->
+    <section id="section-kanban" class="admin-section hidden space-y-4">
+      <h3 class="text-lg font-bold text-white font-mono">Tablero Kanban de Pedidos (Realtime)</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 overflow-x-auto pb-4">
+        
+        <div class="kanban-column space-y-3">
+          <h4 class="text-xs font-bold text-blue-400 uppercase font-mono pb-2 border-b border-blue-500/30">1. Solicitado</h4>
+          <div id="kanban-col-solicitado" class="space-y-3"></div>
+        </div>
+
+        <div class="kanban-column space-y-3">
+          <h4 class="text-xs font-bold text-rose-400 uppercase font-mono pb-2 border-b border-rose-500/30">2. Falta Pago</h4>
+          <div id="kanban-col-falta-de-pago" class="space-y-3"></div>
+        </div>
+
+        <div class="kanban-column space-y-3">
+          <h4 class="text-xs font-bold text-emerald-400 uppercase font-mono pb-2 border-b border-emerald-500/30">3. Aprobada</h4>
+          <div id="kanban-col-aprobada" class="space-y-3"></div>
+        </div>
+
+        <div class="kanban-column space-y-3">
+          <h4 class="text-xs font-bold text-yellow-400 uppercase font-mono pb-2 border-b border-yellow-500/30">4. En Cocina</h4>
+          <div id="kanban-col-en-cocina" class="space-y-3"></div>
+        </div>
+
+        <div class="kanban-column space-y-3">
+          <h4 class="text-xs font-bold text-purple-400 uppercase font-mono pb-2 border-b border-purple-500/30">5. Terminado</h4>
+          <div id="kanban-col-terminado" class="space-y-3"></div>
+        </div>
+
+        <div class="kanban-column space-y-3">
+          <h4 class="text-xs font-bold text-pink-400 uppercase font-mono pb-2 border-b border-pink-500/30">6. Embalando</h4>
+          <div id="kanban-col-embalando" class="space-y-3"></div>
+        </div>
+
+        <div class="kanban-column space-y-3">
+          <h4 class="text-xs font-bold text-orange-400 uppercase font-mono pb-2 border-b border-orange-500/30">7. En Camino</h4>
+          <div id="kanban-col-en-camino" class="space-y-3"></div>
+        </div>
+
+        <div class="kanban-column space-y-3">
+          <h4 class="text-xs font-bold text-teal-400 uppercase font-mono pb-2 border-b border-teal-500/30">8. Entregado</h4>
+          <div id="kanban-col-entregado" class="space-y-3"></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- SECTION 3: PRODUCTOS CRUD -->
+    <section id="section-products" class="admin-section hidden space-y-4">
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-bold text-white font-mono">Gestión de Catálogo de Productos</h3>
+        <button onclick="document.getElementById('productFormModal').classList.remove('hidden'); document.getElementById('productFormModal').classList.add('flex'); document.getElementById('productForm').reset(); document.getElementById('prodFormId').value='';" class="btn-fluna py-2 px-4 text-xs font-bold flex items-center gap-2">
+          <i class="fa-solid fa-plus"></i> Nuevo Producto
+        </button>
+      </div>
+
+      <div class="glass-panel overflow-hidden">
+        <table class="w-full text-left border-collapse">
+          <thead class="bg-slate-950 text-slate-400 font-mono text-xs uppercase border-b border-white/10">
+            <tr>
+              <th class="p-3">Imagen</th>
+              <th class="p-3">Nombre</th>
+              <th class="p-3">Categoría</th>
+              <th class="p-3">Precio</th>
+              <th class="p-3">Stock</th>
+              <th class="p-3">Estado</th>
+              <th class="p-3">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="productsTableBody">
+            <!-- Carga dinámica admin.js -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SECTION 4: FINANZAS Y RESULTADOS -->
+    <section id="section-finances" class="admin-section hidden space-y-6">
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-bold text-white font-mono">Estado de Resultados y Flujo de Caja</h3>
+        <button onclick="document.getElementById('financeModal').classList.remove('hidden'); document.getElementById('financeModal').classList.add('flex');" class="btn-fluna py-2 px-4 text-xs font-bold flex items-center gap-2">
+          <i class="fa-solid fa-plus"></i> Registrar Movimiento
+        </button>
+      </div>
+
+      <div class="glass-panel overflow-hidden">
+        <table class="w-full text-left border-collapse">
+          <thead class="bg-slate-950 text-slate-400 font-mono text-xs uppercase border-b border-white/10">
+            <tr>
+              <th class="p-3">Fecha</th>
+              <th class="p-3">Descripción</th>
+              <th class="p-3">Categoría</th>
+              <th class="p-3">Monto</th>
+            </tr>
+          </thead>
+          <tbody id="financesTableBody">
+            <!-- Carga dinámica admin.js -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SECTION 5: STOCK Y COMPRAS -->
+    <section id="section-stock" class="admin-section hidden space-y-6">
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-bold text-white font-mono">Inventario de Materia Prima e Ingredientes</h3>
+        <button onclick="document.getElementById('purchaseModal').classList.remove('hidden'); document.getElementById('purchaseModal').classList.add('flex');" class="btn-fluna py-2 px-4 text-xs font-bold flex items-center gap-2">
+          <i class="fa-solid fa-cart-shopping"></i> Registrar Compra
+        </button>
+      </div>
+
+      <div id="stockGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Carga dinámica admin.js -->
+      </div>
+    </section>
+
+    <!-- SECTION 6: CHAT CENTER -->
+    <section id="section-chat" class="admin-section hidden space-y-4">
+      <h3 class="text-lg font-bold text-white font-mono">Centro de Atención a Clientes (Realtime)</h3>
+      <div class="glass-panel h-[500px] flex overflow-hidden">
+        <!-- Chat Customer List -->
+        <div id="chatCustomerList" class="w-1/3 border-r border-white/10 bg-slate-950/60 overflow-y-auto">
+          <!-- Carga dinámica admin.js -->
+        </div>
+
+        <!-- Chat Timeline -->
+        <div class="flex-1 flex flex-col justify-between bg-slate-900/40">
+          <div id="adminChatTimeline" class="flex-1 p-4 overflow-y-auto space-y-3">
+            <div class="text-center text-slate-500 text-xs py-16">Selecciona una conversación a la izquierda.</div>
+          </div>
+
+          <form id="adminChatForm" class="p-3 bg-slate-950 border-t border-white/10 flex gap-2">
+            <input type="text" id="adminChatInput" placeholder="Responder al cliente..." class="flex-1 bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500">
+            <button type="submit" class="btn-fluna px-4 py-2 text-xs font-bold"><i class="fa-solid fa-paper-plane"></i> Enviar</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 7: MARKETING IA -->
+    <section id="section-marketing" class="admin-section hidden space-y-6">
+      <h3 class="text-lg font-bold text-white font-mono">Estudio de Marketing IA para Redes Sociales</h3>
+      <div class="glass-panel p-6 space-y-4 max-w-2xl">
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">Seleccionar Tipo de Campaña</label>
+          <select id="mkPromoType" class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs text-white focus:border-orange-500">
+            <option value="viernes">🔥 Promo Viernes de Pizza</option>
+            <option value="2x1">🎉 Promo 2x1 Empanadas Gourmet</option>
+            <option value="neon">✨ Lanzamiento Pizza Pepperoni Neón</option>
+          </select>
+        </div>
+
+        <button id="btnGenerateMarketingCopy" class="btn-fluna py-2.5 px-5 text-xs font-bold flex items-center gap-2">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Generar Copy e Hashtags con IA
+        </button>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-300 mb-1">Resultado Optimizado para Instagram (@fluna_pizzeria)</label>
+          <textarea id="mkCopyOutput" rows="7" readonly class="w-full bg-slate-950 border border-orange-500/40 rounded-xl p-4 text-xs font-mono text-orange-200 focus:outline-none"></textarea>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: Crear/Editar Producto -->
+  <div id="productFormModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b border-white/10 pb-3">
+        <h3 class="text-lg font-bold text-white">Formulario de Producto</h3>
+        <button onclick="document.getElementById('productFormModal').classList.add('hidden')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <form id="productForm" class="space-y-3 text-xs">
+        <input type="hidden" id="prodFormId">
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Nombre</label>
+          <input type="text" id="prodFormName" required class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Categoría</label>
+            <select id="prodFormCategory" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+              <option value="Pizzas">Pizzas</option>
+              <option value="Empanadas">Empanadas</option>
+              <option value="Bebidas">Bebidas</option>
+              <option value="Postres">Postres</option>
+              <option value="Combos">Combos</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Precio ($)</label>
+            <input type="number" step="0.01" id="prodFormPrice" required class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Stock Disponible</label>
+            <input type="number" id="prodFormStock" required value="50" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+          </div>
+          <div class="flex items-center gap-2 pt-5">
+            <input type="checkbox" id="prodFormActive" checked class="accent-orange-500 w-4 h-4">
+            <label for="prodFormActive" class="font-bold text-slate-300">Producto Activo</label>
+          </div>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">URL Imagen</label>
+          <input type="url" id="prodFormImg" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Descripción</label>
+          <textarea id="prodFormDesc" rows="2" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white"></textarea>
+        </div>
+        <button type="submit" class="w-full btn-fluna py-3 font-bold text-xs">Guardar Producto</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Registrar Compra Insumos -->
+  <div id="purchaseModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-md p-6 space-y-4">
+      <div class="flex justify-between items-center border-b border-white/10 pb-3">
+        <h3 class="text-lg font-bold text-white">Registrar Compra de Insumo</h3>
+        <button onclick="document.getElementById('purchaseModal').classList.add('hidden')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <form id="purchaseForm" class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Ingrediente</label>
+          <select id="purchaseIngSelect" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white"></select>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Cantidad Comprada</label>
+          <input type="number" step="0.01" id="purchaseQty" required class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Costo Total ($)</label>
+          <input type="number" step="0.01" id="purchaseCost" required class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Proveedor</label>
+          <input type="text" id="purchaseSupplier" placeholder="Distribuidora Mayorista" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+        </div>
+        <button type="submit" class="w-full btn-fluna py-3 font-bold text-xs">Registrar Compra e Impactar Finanzas</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Nuevo Registro Financiero -->
+  <div id="financeModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-md p-6 space-y-4">
+      <div class="flex justify-between items-center border-b border-white/10 pb-3">
+        <h3 class="text-lg font-bold text-white">Nuevo Registro Financiero</h3>
+        <button onclick="document.getElementById('financeModal').classList.add('hidden')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <form id="financeForm" class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Tipo de Movimiento</label>
+          <select id="finType" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+            <option value="income">Ingreso (+)</option>
+            <option value="expense">Gasto / Costo (-)</option>
+            <option value="investment">Inversión (-)</option>
+            <option value="debt">Deuda (-)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Categoría</label>
+          <select id="finCategory" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+            <option value="sales">Ventas</option>
+            <option value="inventory">Insumos</option>
+            <option value="services">Servicios (Luz/Gas/Agua)</option>
+            <option value="salaries">Sueldos</option>
+            <option value="marketing">Marketing</option>
+            <option value="equipment">Equipamiento</option>
+          </select>
+        </div>
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Monto ($)</label>
+          <input type="number" step="0.01" id="finAmount" required class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Descripción</label>
+          <input type="text" id="finDesc" required placeholder="Concepto del movimiento" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Fecha</label>
+          <input type="date" id="finDate" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+        </div>
+        <button type="submit" class="w-full btn-fluna py-3 font-bold text-xs">Guardar Registro</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Auth Admin Login -->
+  <div id="adminAuthModal" class="fixed inset-0 z-50 bg-black/95 backdrop-blur-xl flex items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-sm p-8 space-y-6 text-center border border-orange-500/40">
+      <div class="w-16 h-16 rounded-2xl overflow-hidden mx-auto border-2 border-orange-500/50 p-1 bg-black shadow-xl">
+        <img src="./brand/logo_fluna.jpg" class="w-full h-full object-cover rounded-xl">
+      </div>
+      <div>
+        <h3 class="text-xl font-black text-white">Acceso Administrador</h3>
+        <p class="text-xs text-slate-400 mt-1 font-mono">Ingrese clave de producción FLuna</p>
+      </div>
+
+      <form id="adminLoginForm" class="space-y-4">
+        <input type="password" id="adminPwdInput" required placeholder="••••••••••••" class="w-full text-center bg-slate-900 border border-white/10 rounded-xl p-3 text-white font-mono focus:border-orange-500 focus:outline-none">
+        <button type="submit" class="w-full btn-fluna py-3 font-bold text-xs">Acceder al Sistema</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Admin Scripts -->
+  <script src="./js/supabase-config.js"></script>
+  <script src="./js/admin.js"></script>
+</body>
+</html>
