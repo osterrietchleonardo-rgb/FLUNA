@@ -110,7 +110,7 @@
     <!-- SECTION 1: DASHBOARD GENERAL -->
     <section id="section-dashboard" class="admin-section space-y-6">
       <!-- KPI Metric Cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <div class="glass-card p-5 space-y-2">
           <span class="text-xs text-slate-400 font-mono block">Ventas Aprobadas</span>
           <div id="kpiTotalSales" class="text-2xl font-black font-mono text-emerald-400">$0</div>
@@ -118,6 +118,14 @@
         <div class="glass-card p-5 space-y-2">
           <span class="text-xs text-slate-400 font-mono block">Total Pedidos</span>
           <div id="kpiTotalOrders" class="text-2xl font-black font-mono text-white">0</div>
+        </div>
+        <div class="glass-card p-5 space-y-2">
+          <span class="text-xs text-slate-400 font-mono block">Ventas por Pagar ($)</span>
+          <div id="kpiUnpaidSales" class="text-2xl font-black font-mono text-yellow-500">$0</div>
+        </div>
+        <div class="glass-card p-5 space-y-2">
+          <span class="text-xs text-slate-400 font-mono block">Ventas por Pagar (Cant.)</span>
+          <div id="kpiUnpaidSalesCount" class="text-2xl font-black font-mono text-yellow-400">0</div>
         </div>
         <div class="glass-card p-5 space-y-2">
           <span class="text-xs text-slate-400 font-mono block">Ganancia Neta</span>
@@ -220,22 +228,24 @@
       </div>
 
       <div class="glass-panel overflow-hidden">
-        <table class="w-full text-left border-collapse">
-          <thead class="bg-slate-950 text-slate-400 font-mono text-xs uppercase border-b border-white/10">
-            <tr>
-              <th class="p-3">Imagen</th>
-              <th class="p-3">Nombre</th>
-              <th class="p-3">Categoría</th>
-              <th class="p-3">Precio</th>
-              <th class="p-3">Stock</th>
-              <th class="p-3">Estado</th>
-              <th class="p-3">Acciones</th>
-            </tr>
-          </thead>
-          <tbody id="productsTableBody">
-            <!-- Carga dinámica admin.js -->
-          </tbody>
-        </table>
+        <div class="max-h-[500px] overflow-y-auto">
+          <table class="w-full text-left border-collapse">
+            <thead class="bg-slate-950 text-slate-400 font-mono text-xs uppercase border-b border-white/10">
+              <tr>
+                <th class="p-3">Imagen</th>
+                <th class="p-3">Nombre</th>
+                <th class="p-3">Categoría</th>
+                <th class="p-3">Precio</th>
+                <th class="p-3">Stock</th>
+                <th class="p-3">Estado</th>
+                <th class="p-3">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="productsTableBody">
+              <!-- Carga dinámica admin.js -->
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 

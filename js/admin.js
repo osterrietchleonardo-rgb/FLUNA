@@ -149,11 +149,15 @@ const FlunaAdmin = {
   },
 
   renderKPIs() {
-    const totalSales = this.state.orders
-      .filter(o => o.payment_status === 'approved' || o.status === 'Aprobada' || o.status === 'Entregado')
-      .reduce((sum, o) => sum + Number(o.total_amount), 0);
+    const approvedOrders = this.state.orders.filter(o => o.payment_status === 'approved' || o.status === 'Aprobada' || o.status === 'Entregado');
+    const totalSales = approvedOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
 
     const totalOrders = this.state.orders.length;
+
+    // Ventas por pagar: órdenes con pago pendiente ('pending') o estados de solicitud/falta de pago
+    const unpaidOrders = this.state.orders.filter(o => o.payment_status === 'pending' || o.status === 'Solicitado' || o.status === 'Falta de pago');
+    const unpaidSales = unpaidOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
+    const unpaidSalesCount = unpaidOrders.length;
 
     const totalIncome = this.state.finances
       .filter(f => f.type === 'income')
@@ -166,12 +170,21 @@ const FlunaAdmin = {
     const netProfit = totalIncome - totalExpenses;
     const criticalStockCount = this.state.ingredients.filter(i => Number(i.current_stock) <= Number(i.min_stock_alert)).length;
 
-    document.getElementById('kpiTotalSales').innerText = '$' + totalSales.toLocaleString('es-AR');
-    document.getElementById('kpiTotalOrders').innerText = totalOrders;
-    document.getElementById('kpiNetProfit').innerText = '$' + netProfit.toLocaleString('es-AR');
-    document.getElementById('kpiCriticalStock').innerText = criticalStockCount;
+    const kpiSales = document.getElementById('kpiTotalSales');
+    const kpiOrd = document.getElementById('kpiTotalOrders');
+    const kpiUnpaid = document.getElementById('kpiUnpaidSales');
+    const kpiUnpaidCount = document.getElementById('kpiUnpaidSalesCount');
+    const kpiNet = document.getElementById('kpiNetProfit');
+    const kpiCrit = document.getElementById('kpiCriticalStock');
 
-    document.getElementById('kpiCriticalStockBadge').classList.toggle('hidden', criticalStockCount === 0);
+    if (kpiSales) kpiSales.innerText = '$' + totalSales.toLocaleString('es-AR');
+    if (kpiOrd) kpiOrd.innerText = totalOrders;
+    if (kpiUnpaid) kpiUnpaid.innerText = '$' + unpaidSales.toLocaleString('es-AR');
+    if (kpiUnpaidCount) kpiUnpaidCount.innerText = unpaidSalesCount;
+    if (kpiNet) kpiNet.innerText = '$' + netProfit.toLocaleString('es-AR');
+    if (kpiCrit) kpiCrit.innerText = criticalStockCount;
+
+    document.getElementById('kpiCriticalStockBadge')?.classList.toggle('hidden', criticalStockCount === 0);
   },
 
   // --- CHARTS (CHART.JS) ---
