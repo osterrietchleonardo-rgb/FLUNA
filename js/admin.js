@@ -149,13 +149,13 @@ const FlunaAdmin = {
   },
 
   renderKPIs() {
-    const approvedOrders = this.state.orders.filter(o => o.payment_status === 'approved' || o.status === 'Aprobada' || o.status === 'Entregado');
+    const approvedOrders = this.state.orders.filter(o => (o.payment_status === 'approved' || o.status === 'Aprobada' || o.status === 'Entregado') && o.status !== 'Cancelado');
     const totalSales = approvedOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
 
-    const totalOrders = this.state.orders.length;
+    const totalOrders = this.state.orders.filter(o => o.status !== 'Cancelado').length;
 
     // Ventas por pagar: órdenes con pago pendiente ('pending') o estados de solicitud/falta de pago
-    const unpaidOrders = this.state.orders.filter(o => o.payment_status === 'pending' || o.status === 'Solicitado' || o.status === 'Falta de pago');
+    const unpaidOrders = this.state.orders.filter(o => (o.payment_status === 'pending' || o.status === 'Solicitado' || o.status === 'Falta de pago') && o.status !== 'Cancelado');
     const unpaidSales = unpaidOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
     const unpaidSalesCount = unpaidOrders.length;
 
@@ -261,7 +261,7 @@ const FlunaAdmin = {
 
   // --- KANBAN BOARD ---
   renderKanbanBoard() {
-    const stages = ['Solicitado', 'Falta de pago', 'Aprobada', 'En cocina', 'Terminado', 'Embalando', 'En camino', 'Entregado'];
+    const stages = ['Solicitado', 'Falta de pago', 'Aprobada', 'En cocina', 'Terminado', 'Embalando', 'En camino', 'Entregado', 'Cancelado'];
 
     stages.forEach(stage => {
       const colId = `kanban-col-${this.slugify(stage)}`;
@@ -297,17 +297,28 @@ const FlunaAdmin = {
   },
 
   renderKanbanNextPrevButtons(orderId, currentStatus, stages) {
-    const currentIdx = stages.indexOf(currentStatus);
     let html = '';
 
-    if (currentIdx > 0) {
-      const prevStage = stages[currentIdx - 1];
-      html += `<button onclick="FlunaAdmin.moveOrderStatus('${orderId}', '${prevStage}')" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded">← ${prevStage}</button>`;
+    if (currentStatus === 'Cancelado') {
+      html += `<button onclick="FlunaAdmin.deleteOrder('${orderId}')" class="text-[10px] bg-rose-600 hover:bg-rose-500 text-white font-bold px-2 py-1 rounded flex items-center gap-1"><i class="fa-solid fa-trash text-[9px]"></i> Eliminar</button>`;
+      html += `<button onclick="FlunaAdmin.moveOrderStatus('${orderId}', 'Solicitado')" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded ml-auto">Reabrir</button>`;
+      return html;
     }
 
-    if (currentIdx < stages.length - 1) {
-      const nextStage = stages[currentIdx + 1];
-      html += `<button onclick="FlunaAdmin.moveOrderStatus('${orderId}', '${nextStage}')" class="text-[10px] bg-orange-600 hover:bg-orange-500 text-white font-bold px-2 py-1 rounded ml-auto">${nextStage} →</button>`;
+    // Botón de Cancelar rápido
+    html += `<button onclick="FlunaAdmin.moveOrderStatus('${orderId}', 'Cancelado')" title="Cancelar Pedido" class="text-[10px] bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 px-2 py-1 rounded flex items-center justify-center"><i class="fa-solid fa-ban"></i></button>`;
+
+    const normalStages = stages.filter(s => s !== 'Cancelado');
+    const normalIdx = normalStages.indexOf(currentStatus);
+
+    if (normalIdx > 0) {
+      const prevStage = normalStages[normalIdx - 1];
+      html += `<button onclick="FlunaAdmin.moveOrderStatus('${orderId}', '${prevStage}')" title="Volver a ${prevStage}" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded">←</button>`;
+    }
+
+    if (normalIdx < normalStages.length - 1) {
+      const nextStage = normalStages[normalIdx + 1];
+      html += `<button onclick="FlunaAdmin.moveOrderStatus('${orderId}', '${nextStage}')" class="text-[10px] bg-orange-600 hover:bg-orange-500 text-white font-bold px-2 py-1 rounded ml-auto flex items-center gap-1">${nextStage} <i class="fa-solid fa-arrow-right text-[9px]"></i></button>`;
     }
 
     return html;
@@ -687,6 +698,19 @@ const FlunaAdmin = {
     const order = this.state.orders.find(o => o.id === orderId);
     if (!order) return;
 
+    // Guardar el ID actual en el modal
+    document.getElementById('adminOrderDetailModal').dataset.orderId = orderId;
+
+    // Mostrar/ocultar el botón Cancelar según el estado
+    const cancelBtn = document.getElementById('adminDetailBtnCancel');
+    if (cancelBtn) {
+      if (order.status === 'Cancelado') {
+        cancelBtn.classList.add('hidden');
+      } else {
+        cancelBtn.classList.remove('hidden');
+      }
+    }
+
     document.getElementById('adminDetailOrderId').innerText = '#' + order.id;
     document.getElementById('adminDetailCustName').innerText = order.customer_name;
     document.getElementById('adminDetailCustPhone').innerText = order.customer_phone;
@@ -731,6 +755,38 @@ const FlunaAdmin = {
     const modal = document.getElementById('adminOrderDetailModal');
     modal.classList.remove('hidden');
     modal.classList.add('flex');
+  },
+
+  async deleteOrder(id) {
+    const res = await FlunaDB.deleteOrder(id);
+    if (res.error) {
+      alert('Error al eliminar el pedido: ' + res.error.message);
+      return;
+    }
+    // Remover de la lista de orders local
+    this.state.orders = this.state.orders.filter(o => o.id !== id);
+    this.renderKanbanBoard();
+    this.renderKPIs();
+  },
+
+  async deleteCurrentOrder() {
+    const orderId = document.getElementById('adminOrderDetailModal').dataset.orderId;
+    if (!orderId) return;
+    
+    if (confirm(`¿Estás seguro de que deseas eliminar permanentemente el Pedido #${orderId}? Esta acción no se puede deshacer.`)) {
+      document.getElementById('adminOrderDetailModal').classList.add('hidden');
+      await this.deleteOrder(orderId);
+    }
+  },
+
+  async cancelCurrentOrder() {
+    const orderId = document.getElementById('adminOrderDetailModal').dataset.orderId;
+    if (!orderId) return;
+
+    if (confirm(`¿Deseas marcar el Pedido #${orderId} como Cancelado?`)) {
+      document.getElementById('adminOrderDetailModal').classList.add('hidden');
+      await this.moveOrderStatus(orderId, 'Cancelado');
+    }
   },
 
   // --- CRUD INGREDIENTES (STOCK) ---
@@ -836,7 +892,7 @@ const FlunaAdmin = {
   calculateAndRenderFinancials() {
     // Ingresos
     const ordersRevenue = this.state.orders
-      .filter(o => o.status === 'Aprobada' || o.status === 'Entregado' || o.payment_status === 'approved')
+      .filter(o => (o.status === 'Aprobada' || o.status === 'Entregado' || o.payment_status === 'approved') && o.status !== 'Cancelado')
       .reduce((sum, o) => sum + Number(o.total_amount), 0);
     const manualIncome = this.state.finances
       .filter(f => f.type === 'income')

@@ -536,6 +536,7 @@ const FlunaApp = {
     }
 
     const latestOrder = this.state.customerOrders[0];
+    const isCancelled = latestOrder.status === 'Cancelado';
     const stages = ['Solicitado', 'Aprobada', 'En cocina', 'Terminado', 'Embalando', 'En camino', 'Entregado'];
     const currentIdx = stages.indexOf(latestOrder.status);
 
@@ -551,24 +552,32 @@ const FlunaApp = {
           </span>
         </div>
 
-        <!-- Pipeline Stepper -->
-        <div class="relative py-4">
-          <div class="grid grid-cols-7 gap-1 text-center relative z-10">
-            ${stages.map((stage, idx) => {
-              const isActive = idx <= currentIdx;
-              const isCurrent = idx === currentIdx;
-              return `
-                <div class="flex flex-col items-center space-y-2">
-                  <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold font-mono transition-all duration-500
-                    ${isCurrent ? 'bg-orange-500 text-white animate-pulse-glow scale-110' : isActive ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-500'}">
-                    ${isActive ? '<i class="fa-solid fa-check"></i>' : (idx + 1)}
-                  </div>
-                  <span class="text-[10px] font-medium leading-tight ${isActive ? 'text-white' : 'text-slate-500'}">${stage}</span>
-                </div>
-              `;
-            }).join('')}
+        ${isCancelled ? `
+          <div class="bg-rose-500/10 border border-rose-500/20 rounded-xl p-6 text-center space-y-3">
+            <i class="fa-solid fa-circle-xmark text-4xl text-rose-500 animate-pulse"></i>
+            <h4 class="text-base font-extrabold text-white">Pedido Cancelado</h4>
+            <p class="text-xs text-slate-400 max-w-sm mx-auto">Este pedido fue cancelado. Si tenés alguna duda o consulta sobre tu orden, podés escribirnos en vivo desde el chat flotante de soporte.</p>
           </div>
-        </div>
+        ` : `
+          <!-- Pipeline Stepper -->
+          <div class="relative py-4">
+            <div class="grid grid-cols-7 gap-1 text-center relative z-10">
+              ${stages.map((stage, idx) => {
+                const isActive = idx <= currentIdx;
+                const isCurrent = idx === currentIdx;
+                return `
+                  <div class="flex flex-col items-center space-y-2">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold font-mono transition-all duration-500
+                      ${isCurrent ? 'bg-orange-500 text-white animate-pulse-glow scale-110' : isActive ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-500'}">
+                      ${isActive ? '<i class="fa-solid fa-check"></i>' : (idx + 1)}
+                    </div>
+                    <span class="text-[10px] font-medium leading-tight ${isActive ? 'text-white' : 'text-slate-500'}">${stage}</span>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `}
 
         <!-- Detalle de la Orden -->
         <div class="bg-slate-950/80 p-4 rounded-xl space-y-3 text-xs border border-white/5">
@@ -595,6 +604,7 @@ const FlunaApp = {
       case 'Embalando': return 'embalando';
       case 'En camino': return 'camino';
       case 'Entregado': return 'entregado';
+      case 'Cancelado': return 'cancelado';
       default: return 'solicitado';
     }
   },

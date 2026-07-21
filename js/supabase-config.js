@@ -93,6 +93,12 @@ const FlunaDB = {
     return await client.from('orders').update(updateData).eq('id', orderId).select();
   },
 
+  async deleteOrder(orderId) {
+    const client = getSupabaseClient();
+    if (!client) return { error: { message: 'Sin cliente DB' } };
+    return await client.from('orders').delete().eq('id', orderId);
+  },
+
   // --- INGREDIENTES & INVENTARIO ---
   async getIngredients() {
     const client = getSupabaseClient();
