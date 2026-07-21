@@ -1,8 +1,7 @@
 {
   "version": 2,
   "rewrites": [
-    { "source": "/admin_fluna", "destination": "/admin.html" },
-    { "source": "/(.*)", "destination": "/$1" }
+    { "source": "/admin_fluna", "destination": "/admin.html" }
   ],
   "headers": [
     {
