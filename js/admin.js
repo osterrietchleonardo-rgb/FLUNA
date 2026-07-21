@@ -92,6 +92,10 @@ const FlunaAdmin = {
     if (btnGenerateMarketingCopy) {
       btnGenerateMarketingCopy.addEventListener('click', () => this.generateAIMarketingCopy());
     }
+
+    // Buscador y Filtro de Productos
+    document.getElementById('adminProdSearch')?.addEventListener('input', () => this.renderProductsTable());
+    document.getElementById('adminProdCatFilter')?.addEventListener('change', () => this.renderProductsTable());
   },
 
   switchTab(tabId) {
@@ -250,14 +254,14 @@ const FlunaAdmin = {
       const stageOrders = this.state.orders.filter(o => o.status === stage);
 
       colEl.innerHTML = stageOrders.map(order => `
-        <div class="glass-card p-4 space-y-3 cursor-grab hover:border-orange-500/50 transition">
+        <div onclick="FlunaAdmin.showOrderDetails('${order.id}')" class="glass-card p-4 space-y-3 cursor-pointer hover:border-orange-500/50 transition">
           <div class="flex items-center justify-between">
             <span class="text-xs font-mono font-bold text-orange-400">#${order.id}</span>
             <span class="text-[10px] text-slate-400 font-mono">${new Date(order.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
           </div>
 
           <div>
-            <h5 class="text-sm font-bold text-white">${order.customer_name}</h5>
+            <h5 class="text-sm font-bold text-white truncate">${order.customer_name}</h5>
             <p class="text-xs text-slate-400 truncate"><i class="fa-solid fa-location-dot text-orange-500"></i> ${order.delivery_address}</p>
           </div>
 
@@ -267,7 +271,7 @@ const FlunaAdmin = {
           </div>
 
           <!-- Mover Estado Quick Action -->
-          <div class="pt-2 border-t border-white/5 flex gap-1 justify-between">
+          <div class="pt-2 border-t border-white/5 flex gap-1 justify-between" onclick="event.stopPropagation()">
             ${this.renderKanbanNextPrevButtons(order.id, order.status, stages)}
           </div>
         </div>
@@ -311,7 +315,16 @@ const FlunaAdmin = {
     const tbody = document.getElementById('productsTableBody');
     if (!tbody) return;
 
-    tbody.innerHTML = this.state.products.map(prod => `
+    const searchTerm = document.getElementById('adminProdSearch')?.value.toLowerCase().trim() || '';
+    const catFilter = document.getElementById('adminProdCatFilter')?.value || 'Todas';
+
+    const filtered = this.state.products.filter(prod => {
+      const matchesSearch = prod.name.toLowerCase().includes(searchTerm) || (prod.description && prod.description.toLowerCase().includes(searchTerm));
+      const matchesCat = catFilter === 'Todas' || prod.category === catFilter;
+      return matchesSearch && matchesCat;
+    });
+
+    tbody.innerHTML = filtered.map(prod => `
       <tr class="border-b border-white/5 hover:bg-slate-900/40 text-xs">
         <td class="p-3">
           <img src="${prod.image_url || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600'}" class="w-10 h-10 object-cover rounded-lg">
@@ -337,12 +350,26 @@ const FlunaAdmin = {
     e.preventDefault();
 
     const id = document.getElementById('prodFormId').value;
+    const fileInput = document.getElementById('prodFormImgFile');
+    let imageUrl = document.getElementById('prodFormImg').value.trim();
+
+    // Si seleccionó un archivo de su PC, subirlo primero a Supabase Storage
+    if (fileInput && fileInput.files && fileInput.files[0]) {
+      const file = fileInput.files[0];
+      const { data, error } = await FlunaDB.uploadProductImage(file);
+      if (error) {
+        alert('Error al subir imagen: ' + error.message);
+        return;
+      }
+      imageUrl = data.publicUrl;
+    }
+
     const productData = {
       name: document.getElementById('prodFormName').value.trim(),
       category: document.getElementById('prodFormCategory').value,
       price: parseFloat(document.getElementById('prodFormPrice').value),
       available_stock: parseInt(document.getElementById('prodFormStock').value),
-      image_url: document.getElementById('prodFormImg').value.trim(),
+      image_url: imageUrl,
       description: document.getElementById('prodFormDesc').value.trim(),
       is_active: document.getElementById('prodFormActive').checked
     };
@@ -352,6 +379,9 @@ const FlunaAdmin = {
     } else {
       await FlunaDB.createProduct(productData);
     }
+
+    // Resetear selector de archivo
+    if (fileInput) fileInput.value = '';
 
     document.getElementById('productFormModal').classList.add('hidden');
     document.getElementById('productFormModal').classList.remove('flex');
@@ -583,6 +613,57 @@ const FlunaAdmin = {
     FlunaDB.subscribeMessages(() => {
       this.loadAllData();
     });
+  },
+
+  // --- DETALLES DE PEDIDO EN MODAL ---
+  showOrderDetails(orderId) {
+    const order = this.state.orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    document.getElementById('adminDetailOrderId').innerText = '#' + order.id;
+    document.getElementById('adminDetailCustName').innerText = order.customer_name;
+    document.getElementById('adminDetailCustPhone').innerText = order.customer_phone;
+    document.getElementById('adminDetailCustEmail').innerText = order.customer_email || 'No registrado';
+    document.getElementById('adminDetailDeliveryType').innerText = order.delivery_type === 'delivery' ? 'Envío a Domicilio' : 'Retiro en Local';
+    document.getElementById('adminDetailCustAddress').innerText = order.delivery_address;
+    document.getElementById('adminDetailPaymentMethod').innerText = order.payment_method;
+    document.getElementById('adminDetailPaymentStatus').innerText = order.payment_status;
+    document.getElementById('adminDetailPaymentId').innerText = order.mp_payment_id || 'N/A';
+    document.getElementById('adminDetailStatus').innerText = order.status;
+    document.getElementById('adminDetailDate').innerText = new Date(order.created_at).toLocaleString('es-AR');
+    document.getElementById('adminDetailTotal').innerText = '$' + Number(order.total_amount).toLocaleString('es-AR');
+
+    if (order.notes) {
+      document.getElementById('adminDetailNotesContainer').classList.remove('hidden');
+      document.getElementById('adminDetailNotes').innerText = order.notes;
+    } else {
+      document.getElementById('adminDetailNotesContainer').classList.add('hidden');
+    }
+
+    const tbody = document.getElementById('adminDetailItemsTableBody');
+    if (tbody && order.order_items) {
+      tbody.innerHTML = order.order_items.map(item => {
+        let opts = [];
+        if (item.selected_options) {
+          if (item.selected_options.size) opts.push(`Tamaño: ${item.selected_options.size}`);
+          if (item.selected_options.extra_cheese) opts.push(`+ Muzzarella Extra`);
+          if (item.selected_options.notes) opts.push(`Notas: ${item.selected_options.notes}`);
+        }
+        return `
+          <tr class="border-b border-white/5 font-mono">
+            <td class="p-3 text-white font-sans font-semibold">${item.product_name}</td>
+            <td class="p-3">${item.quantity}</td>
+            <td class="p-3">$${Number(item.unit_price).toLocaleString('es-AR')}</td>
+            <td class="p-3 text-slate-400 font-sans text-[10px] max-w-[200px] break-words">${opts.join('<br>') || 'Ninguna'}</td>
+            <td class="p-3 font-bold text-white">$${Number(item.subtotal).toLocaleString('es-AR')}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    const modal = document.getElementById('adminOrderDetailModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
   }
 };
 

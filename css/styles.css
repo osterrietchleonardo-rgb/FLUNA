@@ -225,6 +225,8 @@ body {
 /* Kanban Drag & Drop Columns */
 .kanban-column {
   min-height: 500px;
+  min-width: 260px;
+  flex-shrink: 0;
   background: rgba(15, 23, 42, 0.4);
   border-radius: 1rem;
   border: 1px solid rgba(255, 255, 255, 0.05);

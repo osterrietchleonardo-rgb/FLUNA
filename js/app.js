@@ -15,37 +15,33 @@ const FlunaApp = {
     cart: [],
     selectedProductForModal: null,
     customer: {
-      id: localStorage.getItem('fluna_customer_id') || 'CUST-' + Math.floor(100000 + Math.random() * 900000),
-      name: localStorage.getItem('fluna_customer_name') || '',
-      phone: localStorage.getItem('fluna_customer_phone') || '',
-      address: localStorage.getItem('fluna_customer_address') || ''
+      id: '',
+      name: '',
+      phone: '',
+      address: '',
+      email: ''
     },
     activeOrder: null,
     customerOrders: [],
-    messages: []
+    messages: [],
+    authMode: 'login' // 'login' | 'register'
   },
 
   init() {
-    // Guardar customer ID persistente
-    localStorage.setItem('fluna_customer_id', this.state.customer.id);
-
     // Inicializar pasarela de pagos
     if (window.FlunaPayments) FlunaPayments.init();
 
     // Cargar productos desde Supabase
     this.loadProducts();
 
-    // Cargar historial de pedidos del cliente
-    this.loadCustomerOrders();
-
     // Inicializar listeners de UI
     this.bindEvents();
 
+    // Inicializar autenticación y sesión
+    this.initAuth();
+
     // Inicializar PWA service worker y prompt
     this.initPWA();
-
-    // Suscribir a tiempo real órdenes y chat
-    this.initRealtimeSubscriptions();
   },
 
   bindEvents() {
@@ -160,6 +156,44 @@ const FlunaApp = {
     if (chatSendForm) {
       chatSendForm.addEventListener('submit', (e) => this.handleSendChatMessage(e));
     }
+
+    // --- LISTENERS DE AUTENTICACIÓN Y PERFIL ---
+    const authBtn = document.getElementById('authBtn');
+    if (authBtn) {
+      authBtn.addEventListener('click', () => {
+        if (this.state.customer.id) {
+          // Si está logueado, abrir perfil
+          document.getElementById('profileModal').classList.remove('hidden');
+          document.getElementById('profileModal').classList.add('flex');
+          this.switchProfileTab('profile');
+          this.fillProfileFormFields();
+        } else {
+          // Si no, abrir login/registro
+          this.toggleAuthMode('login');
+          document.getElementById('authModal').classList.remove('hidden');
+          document.getElementById('authModal').classList.add('flex');
+        }
+      });
+    }
+
+    document.getElementById('closeAuthModal')?.addEventListener('click', () => {
+      document.getElementById('authModal').classList.add('hidden');
+    });
+
+    document.getElementById('closeProfileModal')?.addEventListener('click', () => {
+      document.getElementById('profileModal').classList.add('hidden');
+    });
+
+    document.getElementById('authToggleBtn')?.addEventListener('click', () => {
+      this.toggleAuthMode(this.state.authMode === 'login' ? 'register' : 'login');
+    });
+
+    document.getElementById('authForm')?.addEventListener('submit', (e) => this.handleAuthSubmit(e));
+    document.getElementById('profileForm')?.addEventListener('submit', (e) => this.handleProfileUpdate(e));
+    document.getElementById('btnLogout')?.addEventListener('click', () => this.handleLogout());
+
+    document.getElementById('tabProfileBtn')?.addEventListener('click', () => this.switchProfileTab('profile'));
+    document.getElementById('tabOrdersBtn')?.addEventListener('click', () => this.switchProfileTab('orders'));
   },
 
   async loadProducts() {
@@ -638,6 +672,187 @@ const FlunaApp = {
         .then(reg => console.log('Service Worker registrado:', reg.scope))
         .catch(err => console.warn('Error registrando Service Worker:', err));
     }
+  },
+
+  // --- MÉTODOS AUXILIARES DE AUTH Y PERFIL ---
+  async initAuth() {
+    const client = getSupabaseClient();
+    if (!client) return;
+
+    // Escuchar cambios de sesión
+    client.auth.onAuthStateChange(async (event, session) => {
+      if (session) {
+        const user = session.user;
+        this.state.customer = {
+          id: user.id,
+          name: user.user_metadata.full_name || '',
+          phone: user.user_metadata.phone || '',
+          address: user.user_metadata.address || '',
+          email: user.email
+        };
+        this.updateAuthUI(true);
+        this.loadCustomerOrders();
+        this.loadChatMessages();
+      } else {
+        this.state.customer = { id: '', name: '', phone: '', address: '', email: '' };
+        this.updateAuthUI(false);
+      }
+    });
+
+    // Cargar sesión inicial
+    const { data: { session } } = await client.auth.getSession();
+    if (session) {
+      const user = session.user;
+      this.state.customer = {
+        id: user.id,
+        name: user.user_metadata.full_name || '',
+        phone: user.user_metadata.phone || '',
+        address: user.user_metadata.address || '',
+        email: user.email
+      };
+      this.updateAuthUI(true);
+      this.loadCustomerOrders();
+      this.loadChatMessages();
+    }
+  },
+
+  updateAuthUI(isLoggedIn) {
+    const authBtnText = document.getElementById('authBtnText');
+    if (authBtnText) {
+      authBtnText.innerText = isLoggedIn ? (this.state.customer.name || 'Mi Perfil') : 'Ingresar';
+    }
+  },
+
+  toggleAuthMode(mode) {
+    this.state.authMode = mode;
+    const title = document.getElementById('authModalTitle');
+    const submitBtn = document.getElementById('authSubmitBtn');
+    const toggleBtnText = document.getElementById('authToggleText');
+    const toggleBtn = document.getElementById('authToggleBtn');
+    const nameField = document.getElementById('authRegisterNameField');
+
+    if (mode === 'login') {
+      if (title) title.innerText = 'Iniciar Sesión';
+      if (submitBtn) submitBtn.innerText = 'Ingresar';
+      if (toggleBtnText) toggleBtnText.innerText = '¿No tenés cuenta?';
+      if (toggleBtn) toggleBtn.innerText = 'Registrate aquí';
+      nameField?.classList.add('hidden');
+      document.getElementById('authName').required = false;
+    } else {
+      if (title) title.innerText = 'Crear Cuenta';
+      if (submitBtn) submitBtn.innerText = 'Registrarse';
+      if (toggleBtnText) toggleBtnText.innerText = '¿Ya tenés cuenta?';
+      if (toggleBtn) toggleBtn.innerText = 'Iniciá sesión';
+      nameField?.classList.remove('hidden');
+      document.getElementById('authName').required = true;
+    }
+  },
+
+  async handleAuthSubmit(e) {
+    e.preventDefault();
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value;
+    const name = document.getElementById('authName').value.trim();
+
+    if (this.state.authMode === 'login') {
+      const { error } = await FlunaDB.signIn(email, password);
+      if (error) {
+        alert('Error al iniciar sesión: ' + error.message);
+      } else {
+        document.getElementById('authModal').classList.add('hidden');
+      }
+    } else {
+      const { error } = await FlunaDB.signUp(email, password, name);
+      if (error) {
+        alert('Error al registrarse: ' + error.message);
+      } else {
+        alert('¡Registro exitoso! Ya puedes iniciar sesión con tu cuenta.');
+        this.toggleAuthMode('login');
+      }
+    }
+  },
+
+  fillProfileFormFields() {
+    if (document.getElementById('profileName')) document.getElementById('profileName').value = this.state.customer.name;
+    if (document.getElementById('profilePhone')) document.getElementById('profilePhone').value = this.state.customer.phone;
+    if (document.getElementById('profileAddress')) document.getElementById('profileAddress').value = this.state.customer.address;
+  },
+
+  async handleProfileUpdate(e) {
+    e.preventDefault();
+    const name = document.getElementById('profileName').value.trim();
+    const phone = document.getElementById('profilePhone').value.trim();
+    const address = document.getElementById('profileAddress').value.trim();
+
+    const { error } = await FlunaDB.updateProfile(name, phone, address);
+    if (error) {
+      alert('Error al actualizar perfil: ' + error.message);
+    } else {
+      alert('¡Perfil actualizado con éxito!');
+      this.state.customer.name = name;
+      this.state.customer.phone = phone;
+      this.state.customer.address = address;
+      this.updateAuthUI(true);
+      document.getElementById('profileModal').classList.add('hidden');
+    }
+  },
+
+  async handleLogout() {
+    if (confirm('¿Cerrar sesión en FLuna?')) {
+      await FlunaDB.signOut();
+      document.getElementById('profileModal').classList.add('hidden');
+      window.location.reload();
+    }
+  },
+
+  switchProfileTab(tab) {
+    const dataSection = document.getElementById('profileDataSection');
+    const ordersSection = document.getElementById('profileOrdersSection');
+    const tabProfileBtn = document.getElementById('tabProfileBtn');
+    const tabOrdersBtn = document.getElementById('tabOrdersBtn');
+
+    if (tab === 'profile') {
+      dataSection?.classList.remove('hidden');
+      ordersSection?.classList.add('hidden');
+      tabProfileBtn?.classList.add('text-orange-400', 'border-b-2', 'border-orange-500');
+      tabProfileBtn?.classList.remove('text-slate-400');
+      tabOrdersBtn?.classList.remove('text-orange-400', 'border-b-2', 'border-orange-500');
+      tabOrdersBtn?.classList.add('text-slate-400');
+    } else {
+      dataSection?.classList.add('hidden');
+      ordersSection?.classList.remove('hidden');
+      tabOrdersBtn?.classList.add('text-orange-400', 'border-b-2', 'border-orange-500');
+      tabOrdersBtn?.classList.remove('text-slate-400');
+      tabProfileBtn?.classList.remove('text-orange-400', 'border-b-2', 'border-orange-500');
+      tabProfileBtn?.classList.add('text-slate-400');
+      this.renderProfileOrders();
+    }
+  },
+
+  renderProfileOrders() {
+    const listContainer = document.getElementById('profileOrdersList');
+    if (!listContainer) return;
+
+    if (this.state.customerOrders.length === 0) {
+      listContainer.innerHTML = `<div class="text-center text-xs text-slate-500 py-8">No realizaste pedidos todavía.</div>`;
+      return;
+    }
+
+    listContainer.innerHTML = this.state.customerOrders.map(order => `
+      <div class="glass-card p-4 space-y-2 border border-white/5">
+        <div class="flex justify-between items-center">
+          <span class="font-bold text-orange-400 font-mono text-xs">#${order.id}</span>
+          <span class="text-[10px] text-slate-400">${new Date(order.created_at).toLocaleDateString('es-AR')}</span>
+        </div>
+        <div class="text-xs text-slate-300">
+          ${order.order_items.map(i => `${i.quantity}x ${i.product_name}`).join(', ')}
+        </div>
+        <div class="flex justify-between items-center text-xs pt-1 border-t border-white/5 font-mono">
+          <span class="text-slate-400">Total: $${Number(order.total_amount).toLocaleString('es-AR')}</span>
+          <span class="badge-status badge-${this.getStatusBadgeClass(order.status)} text-[9px] px-2 py-0.5">${order.status}</span>
+        </div>
+      </div>
+    `).join('');
   }
 };
 

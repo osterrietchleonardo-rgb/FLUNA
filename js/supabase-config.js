@@ -177,6 +177,63 @@ const FlunaDB = {
         onMessageReceived(payload.new);
       })
       .subscribe();
+  },
+
+  // --- AUTENTICACIÓN (SUPABASE AUTH) ---
+  async signUp(email, password, fullName) {
+    const client = getSupabaseClient();
+    if (!client) return { error: { message: 'Sin cliente DB' } };
+    return await client.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+          phone: '',
+          address: ''
+        }
+      }
+    });
+  },
+
+  async signIn(email, password) {
+    const client = getSupabaseClient();
+    if (!client) return { error: { message: 'Sin cliente DB' } };
+    return await client.auth.signInWithPassword({ email, password });
+  },
+
+  async signOut() {
+    const client = getSupabaseClient();
+    if (!client) return { error: { message: 'Sin cliente DB' } };
+    return await client.auth.signOut();
+  },
+
+  async updateProfile(fullName, phone, address) {
+    const client = getSupabaseClient();
+    if (!client) return { error: { message: 'Sin cliente DB' } };
+    return await client.auth.updateUser({
+      data: {
+        full_name: fullName,
+        phone: phone,
+        address: address
+      }
+    });
+  },
+
+  // --- STORAGE (SUBIDA DE IMÁGENES) ---
+  async uploadProductImage(file) {
+    const client = getSupabaseClient();
+    if (!client) return { error: { message: 'Sin cliente DB' } };
+
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+    const filePath = `${fileName}`;
+
+    const { data, error } = await client.storage.from('products').upload(filePath, file);
+    if (error) return { error };
+
+    const { data: { publicUrl } } = client.storage.from('products').getPublicUrl(filePath);
+    return { data: { publicUrl }, error: null };
   }
 };
 

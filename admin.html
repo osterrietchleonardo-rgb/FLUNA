@@ -146,7 +146,7 @@
     <!-- SECTION 2: KANBAN BOARD -->
     <section id="section-kanban" class="admin-section hidden space-y-4">
       <h3 class="text-lg font-bold text-white font-mono">Tablero Kanban de Pedidos (Realtime)</h3>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3 overflow-x-auto pb-4">
+      <div class="flex gap-3 overflow-x-auto pb-4 w-full">
         
         <div class="kanban-column space-y-3">
           <h4 class="text-xs font-bold text-blue-400 uppercase font-mono pb-2 border-b border-blue-500/30">1. Solicitado</h4>
@@ -193,11 +193,30 @@
 
     <!-- SECTION 3: PRODUCTOS CRUD -->
     <section id="section-products" class="admin-section hidden space-y-4">
-      <div class="flex justify-between items-center">
-        <h3 class="text-lg font-bold text-white font-mono">Gestión de Catálogo de Productos</h3>
-        <button onclick="document.getElementById('productFormModal').classList.remove('hidden'); document.getElementById('productFormModal').classList.add('flex'); document.getElementById('productForm').reset(); document.getElementById('prodFormId').value='';" class="btn-fluna py-2 px-4 text-xs font-bold flex items-center gap-2">
-          <i class="fa-solid fa-plus"></i> Nuevo Producto
-        </button>
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/10 pb-4">
+        <div>
+          <h3 class="text-lg font-bold text-white font-mono">Gestión de Catálogo de Productos</h3>
+          <p class="text-[10px] text-slate-400">Creá, editá o eliminá platos de tu menú</p>
+        </div>
+        
+        <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <!-- Buscador -->
+          <input type="text" id="adminProdSearch" placeholder="Buscar producto por nombre..." class="bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500 w-full sm:w-56">
+          
+          <!-- Filtro Categoría -->
+          <select id="adminProdCatFilter" class="bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500">
+            <option value="Todas">Todas las categorías</option>
+            <option value="Pizzas">Pizzas</option>
+            <option value="Empanadas">Empanadas</option>
+            <option value="Bebidas">Bebidas</option>
+            <option value="Postres">Postres</option>
+            <option value="Combos">Combos</option>
+          </select>
+
+          <button onclick="document.getElementById('productFormModal').classList.remove('hidden'); document.getElementById('productFormModal').classList.add('flex'); document.getElementById('productForm').reset(); document.getElementById('prodFormId').value='';" class="btn-fluna py-2 px-4 text-xs font-bold flex items-center gap-2">
+            <i class="fa-solid fa-plus"></i> Nuevo Producto
+          </button>
+        </div>
       </div>
 
       <div class="glass-panel overflow-hidden">
@@ -350,8 +369,12 @@
           </div>
         </div>
         <div>
-          <label class="block font-bold text-slate-300 mb-1">URL Imagen</label>
-          <input type="url" id="prodFormImg" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+          <label class="block font-bold text-slate-300 mb-1">Subir Imagen desde la PC (Supabase Storage)</label>
+          <input type="file" id="prodFormImgFile" accept="image/*" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">O pegar URL de Imagen Manual</label>
+          <input type="url" id="prodFormImg" placeholder="https://ejemplo.com/imagen.jpg" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
         </div>
         <div>
           <label class="block font-bold text-slate-300 mb-1">Descripción</label>
@@ -453,6 +476,74 @@
         <input type="password" id="adminPwdInput" required placeholder="••••••••••••" class="w-full text-center bg-slate-900 border border-white/10 rounded-xl p-3 text-white font-mono focus:border-orange-500 focus:outline-none">
         <button type="submit" class="w-full btn-fluna py-3 font-bold text-xs">Acceder al Sistema</button>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Detalle de Pedido Admin -->
+  <div id="adminOrderDetailModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-2xl p-6 space-y-6 max-h-[90vh] overflow-y-auto border border-orange-500/30">
+      <div class="flex items-center justify-between border-b border-white/10 pb-3">
+        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-receipt text-orange-500"></i> Detalle del Pedido <span id="adminDetailOrderId" class="text-orange-400 font-mono"></span>
+        </h3>
+        <button onclick="document.getElementById('adminOrderDetailModal').classList.add('hidden')" class="text-slate-400 hover:text-white">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs text-slate-300">
+        <!-- Info Cliente -->
+        <div class="space-y-3 bg-slate-950/60 p-4 rounded-xl border border-white/5">
+          <h4 class="text-sm font-bold text-white border-b border-white/10 pb-1 uppercase tracking-wider font-mono">Datos del Cliente</h4>
+          <p><strong>Nombre:</strong> <span id="adminDetailCustName"></span></p>
+          <p><strong>Teléfono:</strong> <span id="adminDetailCustPhone"></span></p>
+          <p><strong>Email:</strong> <span id="adminDetailCustEmail"></span></p>
+          <p><strong>Modalidad:</strong> <span id="adminDetailDeliveryType"></span></p>
+          <p><strong>Dirección:</strong> <span id="adminDetailCustAddress"></span></p>
+        </div>
+
+        <!-- Info Pago y Estado -->
+        <div class="space-y-3 bg-slate-950/60 p-4 rounded-xl border border-white/5">
+          <h4 class="text-sm font-bold text-white border-b border-white/10 pb-1 uppercase tracking-wider font-mono">Pago y Estado</h4>
+          <p><strong>Método de Pago:</strong> <span id="adminDetailPaymentMethod" class="uppercase font-bold"></span></p>
+          <p><strong>Estado del Pago:</strong> <span id="adminDetailPaymentStatus" class="font-mono"></span></p>
+          <p><strong>ID Transacción MP:</strong> <span id="adminDetailPaymentId" class="font-mono"></span></p>
+          <p><strong>Estado del Pedido:</strong> <span id="adminDetailStatus" class="font-mono"></span></p>
+          <p><strong>Fecha/Hora:</strong> <span id="adminDetailDate"></span></p>
+        </div>
+      </div>
+
+      <!-- Items del Pedido -->
+      <div class="space-y-3">
+        <h4 class="text-sm font-bold text-white uppercase tracking-wider font-mono">Productos Solicitados</h4>
+        <div class="glass-panel overflow-hidden">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead class="bg-slate-950 text-slate-400 font-mono uppercase border-b border-white/10">
+              <tr>
+                <th class="p-3">Producto</th>
+                <th class="p-3">Cantidad</th>
+                <th class="p-3">Precio Unitario</th>
+                <th class="p-3">Especificaciones</th>
+                <th class="p-3">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody id="adminDetailItemsTableBody">
+              <!-- Carga dinámica -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Notas -->
+      <div id="adminDetailNotesContainer" class="bg-slate-950/50 p-4 rounded-xl border border-white/5 hidden">
+        <h4 class="text-xs font-bold text-slate-400 uppercase font-mono">Aclaraciones especiales del cliente:</h4>
+        <p id="adminDetailNotes" class="text-xs text-white mt-1 italic"></p>
+      </div>
+
+      <div class="flex justify-between items-center border-t border-white/10 pt-4">
+        <div class="text-slate-400 font-mono text-sm">TOTAL: <span id="adminDetailTotal" class="text-xl font-extrabold text-orange-400"></span></div>
+        <button onclick="document.getElementById('adminOrderDetailModal').classList.add('hidden')" class="btn-fluna py-2 px-4 text-xs font-bold">Cerrar</button>
+      </div>
     </div>
   </div>
 
