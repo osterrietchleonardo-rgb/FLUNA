@@ -637,6 +637,21 @@
             <i id="mkBtnIcon" class="fa-solid fa-wand-magic-sparkles"></i>
             <span id="mkBtnText">Generar Campaña con Gemini IA ✨</span>
           </button>
+
+          <!-- Configuración de API Key Personalizada -->
+          <div class="pt-2 border-t border-white/10">
+            <details class="text-xs text-slate-400">
+              <summary class="cursor-pointer hover:text-orange-400 font-mono text-[11px] select-none flex items-center justify-between">
+                <span>⚙️ Clave API Gemini (Google AI Studio)</span>
+                <i class="fa-solid fa-key text-[10px] text-orange-400"></i>
+              </summary>
+              <div class="mt-2 space-y-2 bg-slate-950 p-3 rounded-xl border border-white/5">
+                <p class="text-[10px] text-slate-400 leading-tight">Si deseas usar tu propia clave de Google AI Studio, pégala aquí (comienza con <code class="text-orange-400 font-mono">AIzaSy...</code>):</p>
+                <input type="password" id="mkGeminiKeyInput" placeholder="AIzaSy..." class="w-full bg-slate-900 border border-white/10 rounded-xl p-2 text-xs text-white focus:border-orange-500 font-mono">
+                <button type="button" onclick="FlunaAdmin.saveCustomGeminiKey()" class="w-full bg-slate-800 hover:bg-slate-700 text-xs font-bold text-white py-1.5 rounded-xl border border-white/10">Guardar Clave</button>
+              </div>
+            </details>
+          </div>
         </div>
 
         <!-- Panel de Resultado & Preview -->
