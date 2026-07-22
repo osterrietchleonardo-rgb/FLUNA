@@ -1691,13 +1691,18 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
   },
 
   // --- GESTIÓN DE PEDIDOS MANUALES (PIPELINE) ---
-  openManualOrderModal() {
+  async openManualOrderModal() {
     this.state.manualOrderItems = {};
     const form = document.getElementById('manualOrderForm');
     if (form) form.reset();
 
     const addressContainer = document.getElementById('manualAddressContainer');
     if (addressContainer) addressContainer.classList.add('hidden');
+
+    if (!this.state.products || this.state.products.length === 0) {
+      const res = await FlunaDB.getProducts();
+      if (res.data) this.state.products = res.data;
+    }
 
     this.renderManualOrderProducts();
     this.updateManualOrderTotal();
