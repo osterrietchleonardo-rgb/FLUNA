@@ -981,13 +981,13 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
 
     if (error || !data) {
       const errMsg = error?.message || 'Error de conexión';
-      alert(`Servidor Vercel / Gemini API: ${errMsg}\n\nSe desplegó la plantilla de respuesta de respaldo.`);
-      const fallbackText = `📐 [ESPECIFICACIONES VISUALES Y FOTOGRAFÍA]\n- Formato: ${dimensions}\n- Estilo: Fotografía cenital con iluminación cálida sobre fondo negro neón (#E96D25).\n\n🎯 [HOOK PERSUASIVO]\n¿Buscás la combinación perfecta para esta noche? 🍕✨\n\n🍕 [CUERPO SENSORIAL]\nProbá "${prod.name}": masa madre con 48hs de fermentación lenta, abundantes ingredientes seleccionados y el inigualable toque del horno de piedra.\n\n🚀 [LLAMADO A LA ACCIÓN]\n👉 Hacé tu pedido en 1 minuto desde nuestra PWA con Mercado Pago:\nhttps://fluna.app\n\n🏷️ [HASHTAGS]\n#FLunaPizzeria #${prod.name.replace(/ /g, '')} #MasaMadre #PizzeriaArtesanal #MercadoPago`;
-      if (outputEl) outputEl.value = fallbackText;
+      alert(`Servidor Vercel / Gemini API: ${errMsg}\n\nSe desplegó la tarjeta con plantilla de respuesta y foto IA.`);
+      const fallbackText = `🎯 [HOOK PERSUASIVO]\n¿Buscás la combinación perfecta para esta noche? 🍕✨\n\n🍕 [CUERPO SENSORIAL]\nProbá "${prod.name}": masa madre con 48hs de fermentación lenta, abundantes ingredientes seleccionados y el inigualable toque del horno de piedra.\n\n🚀 [LLAMADO A LA ACCIÓN]\n👉 Hacé tu pedido en 1 minuto desde nuestra PWA con Mercado Pago:\nhttps://fluna.app\n\n🏷️ [HASHTAGS]\n#FLunaPizzeria #${prod.name.replace(/ /g, '')} #MasaMadre #PizzeriaArtesanal #MercadoPago`;
+      this.renderInstagramCardMockup(fallbackText, prod, format, angle);
       return;
     }
 
-    if (outputEl) outputEl.value = data;
+    this.renderInstagramCardMockup(data, prod, format, angle);
 
     // Guardar en Historial
     const historyItem = {
@@ -1004,6 +1004,93 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
     localStorage.setItem('fluna_mk_history', JSON.stringify(this.state.marketingHistory));
 
     this.renderMarketingHistory();
+  },
+
+  renderInstagramCardMockup(text, prod, format, angle) {
+    const isStory = format === 'story';
+    const badgeEl = document.getElementById('mkCardFormatBadge');
+    if (badgeEl) {
+      badgeEl.innerText = isStory ? 'Story 1080x1920 (9:16)' : 'Feed 1080x1350 (4:5)';
+    }
+
+    // AI Image URL
+    const seed = Math.floor(Math.random() * 100000);
+    const width = 1080;
+    const height = isStory ? 1920 : 1350;
+    const isEmpanada = (prod.category || '').toLowerCase().includes('empanada');
+    const dishType = isEmpanada ? 'argentine gourmet empanadas' : 'sourdough artisan pizza';
+    const promptText = encodeURIComponent(`delicious ${dishType} ${prod.name}, melted mozzarella, crispy crust, food photography 8k, dark aesthetic, neon orange accents, professional food post, seed ${seed}`);
+    const imageUrl = `https://image.pollinations.ai/prompt/${promptText}?width=${width}&height=${height}&nologo=true`;
+
+    const imgEl = document.getElementById('mkCardImage');
+    const imgPlaceholder = document.getElementById('mkImagePlaceholder');
+    const imgOverlay = document.getElementById('mkImageOverlay');
+
+    if (imgEl) {
+      imgEl.src = imageUrl;
+      imgEl.onload = () => {
+        imgEl.classList.remove('hidden');
+        if (imgPlaceholder) imgPlaceholder.classList.add('hidden');
+        if (imgOverlay) imgOverlay.classList.remove('hidden');
+      };
+      imgEl.onerror = () => {
+        if (imgPlaceholder) imgPlaceholder.classList.remove('hidden');
+      };
+    }
+
+    // Parse sections from text
+    let hook = `🔥 ¡Imposible resistirse a esta ${prod.name}! 🍕✨`;
+    let body = `Elaborada artesanalmente con masa madre fermentada 48 horas e ingredientes seleccionados.`;
+    let cta = `👉 Pedí en 1 min en fluna.app con Mercado Pago`;
+    let hashtags = `#FLunaPizzeria #${prod.name.replace(/ /g, '')} #PizzaMasaMadre #DeliveryArgentina`;
+
+    if (text) {
+      const hookMatch = text.match(/🎯\s*\[?HOOK[^\]]*\]?\s*([\s\S]*?)(?=🍕|🚀|🏷️|📐|$)/i);
+      if (hookMatch && hookMatch[1].trim()) hook = hookMatch[1].trim();
+
+      const bodyMatch = text.match(/🍕\s*\[?CUERPO[^\]]*\]?\s*([\s\S]*?)(?=🚀|🏷️|📐|$)/i);
+      if (bodyMatch && bodyMatch[1].trim()) body = bodyMatch[1].trim();
+
+      const ctaMatch = text.match(/🚀\s*\[?LLAMADO[^\]]*\]?\s*([\s\S]*?)(?=🏷️|📐|$)/i);
+      if (ctaMatch && ctaMatch[1].trim()) cta = ctaMatch[1].trim();
+
+      const hashMatch = text.match(/🏷️\s*\[?HASHTAGS[^\]]*\]?\s*([\s\S]*?)$/i);
+      if (hashMatch && hashMatch[1].trim()) hashtags = hashMatch[1].trim();
+    }
+
+    const hookEl = document.getElementById('mkCardHook');
+    const bodyEl = document.getElementById('mkCardBody');
+    const ctaEl = document.getElementById('mkCardCTA');
+    const hashEl = document.getElementById('mkCardHashtags');
+    const outputEl = document.getElementById('mkCopyOutput');
+
+    if (hookEl) hookEl.innerText = hook;
+    if (bodyEl) bodyEl.innerText = body;
+    if (ctaEl) ctaEl.innerText = cta;
+    if (hashEl) hashEl.innerText = hashtags;
+
+    const fullCopy = `${hook}\n\n${body}\n\n${cta}\n\n${hashtags}`;
+    if (outputEl) outputEl.value = fullCopy;
+  },
+
+  regenerateAIImage() {
+    const prodId = document.getElementById('mkProductSelect')?.value;
+    const format = document.getElementById('mkFormatSelect')?.value || 'feed';
+    const prod = this.state.products.find(p => p.id === prodId) || this.state.products[0] || { name: 'Pizza', category: 'Pizzas' };
+    
+    const isStory = format === 'story';
+    const width = 1080;
+    const height = isStory ? 1920 : 1350;
+    const seed = Math.floor(Math.random() * 1000000);
+    const isEmpanada = (prod.category || '').toLowerCase().includes('empanada');
+    const dishType = isEmpanada ? 'argentine gourmet empanadas' : 'sourdough artisan pizza';
+    const promptText = encodeURIComponent(`delicious ${dishType} ${prod.name}, melted mozzarella, crispy crust, food photography 8k, dark aesthetic, neon orange accents, professional food post, seed ${seed}`);
+    const newUrl = `https://image.pollinations.ai/prompt/${promptText}?width=${width}&height=${height}&nologo=true`;
+
+    const imgEl = document.getElementById('mkCardImage');
+    if (imgEl) {
+      imgEl.src = newUrl;
+    }
   },
 
   copyMarketingOutput() {
@@ -1043,8 +1130,10 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
 
   loadMarketingHistoryItem(id) {
     const item = this.state.marketingHistory.find(i => i.id === id);
-    if (item && document.getElementById('mkCopyOutput')) {
-      document.getElementById('mkCopyOutput').value = item.content;
+    if (item) {
+      const prod = this.state.products.find(p => p.name === item.productName) || { name: item.productName, category: 'Pizzas' };
+      const isStory = item.format.includes('9:16');
+      this.renderInstagramCardMockup(item.content, prod, isStory ? 'story' : 'feed', item.angle);
     }
   },
 
