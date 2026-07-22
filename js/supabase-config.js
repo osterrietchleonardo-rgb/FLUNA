@@ -326,54 +326,25 @@ const FlunaDB = {
     return await client.from('product_recipes').insert(formatted).select();
   },
 
-  // --- GEMINI AI MARKETING ENGINE ---
+  // --- GEMINI AI MARKETING ENGINE (VERCEL SERVERLESS FUNCTION) ---
   async generateGeminiContent(promptText) {
-    const userSavedKey = localStorage.getItem('fluna_gemini_key');
-    const k1 = 'AQ.Ab8RN6J8AF1Viymy4qaIHbsZSxQq9mm9M';
-    const k2 = 'BxNRAv2yEbU6Fa9w';
-    const apiKey = (userSavedKey && userSavedKey.trim()) ? userSavedKey.trim() : [k1, k2].join('_');
+    try {
+      const response = await fetch('/api/generate-marketing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: promptText })
+      });
 
-    const models = [
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent',
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
-    ];
-
-    let lastError = null;
-
-    for (const endpoint of models) {
-      try {
-        const response = await fetch(`${endpoint}?key=${apiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{ text: promptText }]
-            }]
-          })
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          const msg = errorData.error?.message || `HTTP ${response.status}`;
-          lastError = new Error(msg);
-          if (response.status === 400 || response.status === 403) {
-            break;
-          }
-          continue;
-        }
-
-        const data = await response.json();
-        const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (generatedText) {
-          return { data: generatedText, error: null };
-        }
-      } catch (err) {
-        lastError = err;
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        throw new Error(data.error || `HTTP ${response.status}`);
       }
-    }
 
-    return { data: null, error: lastError || new Error('Error al conectar con la API de Gemini.') };
+      return { data: data.text, error: null };
+    } catch (err) {
+      console.error('Error llamando a Serverless Function Vercel:', err);
+      return { data: null, error: err };
+    }
   }
 };
 

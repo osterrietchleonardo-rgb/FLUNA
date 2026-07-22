@@ -902,10 +902,6 @@ const FlunaAdmin = {
     const select = document.getElementById('mkProductSelect');
     if (!select) return;
 
-    const savedKey = localStorage.getItem('fluna_gemini_key');
-    const keyInput = document.getElementById('mkGeminiKeyInput');
-    if (keyInput && savedKey) keyInput.value = savedKey;
-
     if (this.state.products.length === 0) {
       select.innerHTML = `<option value="">-- Sin productos en catálogo --</option>`;
       return;
@@ -984,8 +980,8 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
     if (btnText) btnText.innerText = 'Generar Campaña con Gemini IA ✨';
 
     if (error || !data) {
-      const errMsg = error?.message || 'Error de autenticación/conexión';
-      alert(`Mensaje de Gemini API: ${errMsg}\n\nSe utilizará la plantilla de respaldo. Si deseas usar tu propia clave gratuita de Google AI Studio (comienza con AIzaSy...), ingresala abajo en '⚙️ Clave API Gemini'.`);
+      const errMsg = error?.message || 'Error de conexión';
+      alert(`Servidor Vercel / Gemini API: ${errMsg}\n\nSe desplegó la plantilla de respuesta de respaldo.`);
       const fallbackText = `📐 [ESPECIFICACIONES VISUALES Y FOTOGRAFÍA]\n- Formato: ${dimensions}\n- Estilo: Fotografía cenital con iluminación cálida sobre fondo negro neón (#E96D25).\n\n🎯 [HOOK PERSUASIVO]\n¿Buscás la combinación perfecta para esta noche? 🍕✨\n\n🍕 [CUERPO SENSORIAL]\nProbá "${prod.name}": masa madre con 48hs de fermentación lenta, abundantes ingredientes seleccionados y el inigualable toque del horno de piedra.\n\n🚀 [LLAMADO A LA ACCIÓN]\n👉 Hacé tu pedido en 1 minuto desde nuestra PWA con Mercado Pago:\nhttps://fluna.app\n\n🏷️ [HASHTAGS]\n#FLunaPizzeria #${prod.name.replace(/ /g, '')} #MasaMadre #PizzeriaArtesanal #MercadoPago`;
       if (outputEl) outputEl.value = fallbackText;
       return;
@@ -1049,17 +1045,6 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
     const item = this.state.marketingHistory.find(i => i.id === id);
     if (item && document.getElementById('mkCopyOutput')) {
       document.getElementById('mkCopyOutput').value = item.content;
-    }
-  },
-
-  saveCustomGeminiKey() {
-    const key = document.getElementById('mkGeminiKeyInput')?.value.trim();
-    if (key) {
-      localStorage.setItem('fluna_gemini_key', key);
-      alert('¡Clave de Google AI Studio guardada exitosamente en este navegador!');
-    } else {
-      localStorage.removeItem('fluna_gemini_key');
-      alert('Se ha restablecido la clave predeterminada del sistema.');
     }
   },
 
