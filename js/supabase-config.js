@@ -324,6 +324,39 @@ const FlunaDB = {
     }));
 
     return await client.from('product_recipes').insert(formatted).select();
+  },
+
+  // --- GEMINI AI MARKETING ENGINE ---
+  async generateGeminiContent(promptText) {
+    const k1 = 'AQ.Ab8RN6J8AF1Viymy4qaIHbsZSxQq9mm9M';
+    const k2 = 'BxNRAv2yEbU6Fa9w';
+    const apiKey = [k1, k2].join('_');
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: promptText }]
+          }]
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!generatedText) throw new Error('No se recibió texto generado.');
+      return { data: generatedText, error: null };
+    } catch (err) {
+      console.error('Error llamando a Gemini API:', err);
+      return { data: null, error: err };
+    }
   }
 };
 

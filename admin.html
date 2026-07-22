@@ -590,24 +590,83 @@
 
     <!-- SECTION 7: MARKETING IA -->
     <section id="section-marketing" class="admin-section hidden space-y-6">
-      <h3 class="text-lg font-bold text-white font-mono">Estudio de Marketing IA para Redes Sociales</h3>
-      <div class="glass-panel p-6 space-y-4 max-w-2xl">
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/10 pb-4">
         <div>
-          <label class="block text-xs font-bold text-slate-300 mb-1">Seleccionar Tipo de Campaña</label>
-          <select id="mkPromoType" class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs text-white focus:border-orange-500">
-            <option value="viernes">🔥 Promo Viernes de Pizza</option>
-            <option value="2x1">🎉 Promo 2x1 Empanadas Gourmet</option>
-            <option value="neon">✨ Lanzamiento Pizza Pepperoni Neón</option>
-          </select>
+          <h3 class="text-lg font-bold text-white font-mono flex items-center gap-2">
+            <i class="fa-solid fa-wand-magic-sparkles text-orange-500"></i> Estudio Creativo de Marketing IA (Gemini 1.5)
+          </h3>
+          <p class="text-[10px] text-slate-400 font-mono">Generación de Contenido con Psicología de Ventas • Optimizado para Instagram</p>
+        </div>
+        
+        <span class="px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-400 text-xs font-mono font-bold flex items-center gap-1.5">
+          <i class="fa-solid fa-brain"></i> GOOGLE GEMINI AI
+        </span>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Panel de Configuración -->
+        <div class="glass-panel p-6 space-y-4 lg:col-span-1 border border-orange-500/30">
+          <h4 class="text-xs font-bold text-white uppercase font-mono tracking-wider border-b border-white/10 pb-2">Configurar Campaña</h4>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-300 mb-1">1. Producto / Oferta del Menú *</label>
+            <select id="mkProductSelect" class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs text-white focus:border-orange-500 focus:outline-none">
+              <!-- Carga dinámica admin.js -->
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-300 mb-1">2. Formato de Publicación *</label>
+            <select id="mkFormatSelect" class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs text-white focus:border-orange-500 focus:outline-none">
+              <option value="feed">📸 Post para Feed (1080 x 1350 px • Relación 4:5)</option>
+              <option value="story">📱 Historia / Reel (1080 x 1920 px • Relación 9:16)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-300 mb-1">3. Ángulo de Psicología de Ventas *</label>
+            <select id="mkAngleSelect" class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-xs text-white focus:border-orange-500 focus:outline-none">
+              <option value="visceral">🔥 Antojo Visceral & Gastro-Porn (Masa Madre / Muzzarella / Crocante)</option>
+              <option value="urgency">⏳ Urgencia & Escasez ("Pocas unidades esta noche")</option>
+              <option value="social">🍕 Noche de Amigos & Compartir (Experiencia / Comunidad)</option>
+              <option value="convenience">🚀 Conveniencia & Delivery Rápido (PWA / Mercado Pago)</option>
+            </select>
+          </div>
+
+          <button id="btnGenerateMarketingCopy" class="w-full btn-fluna py-3 text-xs font-bold flex items-center justify-center gap-2 shadow-lg">
+            <i id="mkBtnIcon" class="fa-solid fa-wand-magic-sparkles"></i>
+            <span id="mkBtnText">Generar Campaña con Gemini IA ✨</span>
+          </button>
         </div>
 
-        <button id="btnGenerateMarketingCopy" class="btn-fluna py-2.5 px-5 text-xs font-bold flex items-center gap-2">
-          <i class="fa-solid fa-wand-magic-sparkles"></i> Generar Copy e Hashtags con IA
-        </button>
+        <!-- Panel de Resultado & Preview -->
+        <div class="glass-panel p-6 space-y-4 lg:col-span-2 flex flex-col justify-between">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between border-b border-white/10 pb-2">
+              <h4 class="text-xs font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2">
+                <i class="fa-brands fa-instagram text-pink-500"></i> Copys e Indicaciones de Diseño
+              </h4>
+              <button id="btnCopyMarketingOutput" onclick="FlunaAdmin.copyMarketingOutput()" class="text-xs bg-slate-900 hover:bg-slate-800 text-orange-400 font-bold px-3 py-1.5 rounded-xl border border-white/10 transition flex items-center gap-1.5">
+                <i class="fa-solid fa-copy"></i> Copiar al Portapapeles
+              </button>
+            </div>
 
-        <div>
-          <label class="block text-xs font-bold text-slate-300 mb-1">Resultado Optimizado para Instagram (@fluna_pizzeria)</label>
-          <textarea id="mkCopyOutput" rows="7" readonly class="w-full bg-slate-950 border border-orange-500/40 rounded-xl p-4 text-xs font-mono text-orange-200 focus:outline-none"></textarea>
+            <textarea id="mkCopyOutput" rows="14" placeholder="Haz clic en 'Generar Campaña' para que Gemini IA elabore la estructura persuasiva de tu post/historia..." class="w-full bg-slate-950 border border-white/10 rounded-xl p-4 text-xs font-mono text-slate-200 focus:outline-none leading-relaxed"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- Historial de Campañas Generadas -->
+      <div class="glass-panel p-6 space-y-4">
+        <div class="flex items-center justify-between border-b border-white/10 pb-2">
+          <h4 class="text-xs font-bold text-white uppercase font-mono tracking-wider flex items-center gap-2">
+            <i class="fa-solid fa-clock-rotate-left text-orange-400"></i> Historial de Campañas Generadas
+          </h4>
+          <button onclick="FlunaAdmin.clearMarketingHistory()" class="text-[11px] text-rose-400 hover:underline font-mono">Limpiar historial</button>
+        </div>
+
+        <div id="mkHistoryContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <!-- Carga dinámica admin.js -->
         </div>
       </div>
     </section>

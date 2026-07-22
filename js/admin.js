@@ -20,7 +20,8 @@ const FlunaAdmin = {
     chatFilter: 'all',
     chatSearchQuery: '',
     archivedCustomers: JSON.parse(localStorage.getItem('fluna_archived_chats') || '[]'),
-    chatTimer: null
+    chatTimer: null,
+    marketingHistory: JSON.parse(localStorage.getItem('fluna_mk_history') || '[]')
   },
 
   init() {
@@ -144,6 +145,10 @@ const FlunaAdmin = {
     if (tabId === 'chat') {
       this.renderChatCenter();
       this.state.chatTimer = setInterval(() => this.refreshChatDataSilently(), 10000);
+    }
+    if (tabId === 'marketing') {
+      this.populateMarketingProducts();
+      this.renderMarketingHistory();
     }
   },
 
@@ -892,19 +897,161 @@ const FlunaAdmin = {
     this.loadAllData();
   },
 
-  // --- MARKETING IA GENERATOR ---
-  generateAIMarketingCopy() {
-    const promoType = document.getElementById('mkPromoType').value;
-    const outputContainer = document.getElementById('mkCopyOutput');
+  // --- MARKETING IA GENERATOR CON GEMINI API ---
+  populateMarketingProducts() {
+    const select = document.getElementById('mkProductSelect');
+    if (!select) return;
 
-    const presets = {
-      'viernes': `🔥 ¡VIERNES DE PIZZA EN FLUNA! 🔥\n\n¿Plan para hoy? Masa madre crujiente, muzzarella derretida y el mejor sabor ahumado directo a tu mesa. 🍕✨\n\n👉 Pedí en 1 minuto desde nuestra PWA con Mercado Pago:\nhttps://fluna.app\n\n#FLunaPizzeria #PizzaNoche #ViernesDePizza #DeliveryPizza`,
-      '2x1': `🎉 ¡SUPER PROMO 2x1 EN EMPANADAS PREMIUM! 🎉\n\nProbá las de carne cortada a cuchillo o jamón y queso gourmet. ¡Llevás 12 y pagás 6!\n\n🚀 Hacé tu pedido online ahora en FLuna:\nhttps://fluna.app\n\n#EmpanadasCriollas #FLunaPizzeria #PromoGastronomica #MercadoPago`,
-      'neon': `✨ NUEVO SABOR NEÓN: PEPPERONI ESPECIAL FLUNA ✨\n\nUna combinación explosiva de salsa de tomate artesanal, muzzarella fundida y rodajas de pepperoni crocante picante.\n\n🍕 Pedí directo desde tu celu sin instalar nada:\nhttps://fluna.app\n\n#PepperoniPizza #FoodPorn #FLuna #PizzeriaArtesanal`
+    if (this.state.products.length === 0) {
+      select.innerHTML = `<option value="">-- Sin productos en catálogo --</option>`;
+      return;
+    }
+
+    select.innerHTML = this.state.products.map(p => `
+      <option value="${p.id}">${p.name} ($${Number(p.price).toLocaleString('es-AR')}) - ${p.category}</option>
+    `).join('');
+  },
+
+  async generateAIMarketingCopy() {
+    const prodId = document.getElementById('mkProductSelect')?.value;
+    const format = document.getElementById('mkFormatSelect')?.value || 'feed';
+    const angle = document.getElementById('mkAngleSelect')?.value || 'visceral';
+    const outputEl = document.getElementById('mkCopyOutput');
+    const btnIcon = document.getElementById('mkBtnIcon');
+    const btnText = document.getElementById('mkBtnText');
+
+    const prod = this.state.products.find(p => p.id === prodId) || this.state.products[0];
+    if (!prod) {
+      alert('Por favor agrega un producto al menú para generar campañas.');
+      return;
+    }
+
+    const isStory = format === 'story';
+    const dimensions = isStory ? '1080 x 1920 px (Relación Aspecto 9:16 Vertical)' : '1080 x 1350 px (Relación Aspecto 4:5 Portrait Feed)';
+
+    const anglesMap = {
+      'visceral': 'Antojo Visceral & Gastro-Porn (Resaltar la masa madre fermentada 48h, muzzarella derretida, crujido del borde alveolado, aroma y calor del horno de piedra a 450°C).',
+      'urgency': 'Urgencia & Escasez (Enfocar en stock limitado por masa artesanal diaria, pocas pizzas disponibles para esta noche, comprar antes de que se agote).',
+      'social': 'Prueba Social & Noche de Amigos (Enfocar en la reunión perfecta de fin de semana, compartir momentos inolvidables con la mejor pizza artesanal).',
+      'convenience': 'Conveniencia & Pedido Rápido PWA (Enfocar en pedir en 1 minuto sin instalar nada desde la PWA, pago seguro Mercado Pago y seguimiento en tiempo real).'
     };
 
-    if (outputContainer) {
-      outputContainer.value = presets[promoType] || presets['viernes'];
+    const prompt = `Actúa como un Copywriter y Director Creativo Estrella de Marketing Gastronómico especializado en pizzerías de masa madre y conversión de ventas en Instagram.
+
+Tus textos deben ser 100% humanos, persuasivos, con enfoque en psicología del consumidor y dirigidos en segunda persona del singular con tono argentino Rioplatense informal y cercano ("vos", "tus pizzas", "pedí", "disfrutá").
+
+DATOS DE LA CAMPAÑA:
+- Producto/Oferta: "${prod.name}"
+- Categoría: "${prod.category}"
+- Precio: "$${Number(prod.price).toLocaleString('es-AR')}"
+- Descripción del plato: "${prod.description || 'Elaborado artesanalmente en horno de piedra con ingredientes seleccionados.'}"
+- Formato Solicitado: ${isStory ? 'Historia / Reel (Vertical 9:16)' : 'Post para Feed (Portrait 4:5)'}
+- Dimensiones del Asset: ${dimensions}
+- Ángulo Psicológico Principal: ${anglesMap[angle]}
+
+ESTRUCTURA OBLIGATORIA DE LA RESPUESTA:
+
+📐 [ESPECIFICACIONES VISUALES Y FOTOGRAFÍA]
+- Formato exacto: ${dimensions}
+- Paleta de Colores de Marca: Fondo negro profundo, detalles en brillo naranja neón (#E96D25) y blanco cálido.
+- Sugerencia de Fotografía/Video: Describe la escena visual irresistible que debe acompañar a este post/historia.
+
+🎯 [HOOK PERSUASIVO (3 Segundos)]
+Escribe 2 opciones de ganchos irresistibles que frenen el scroll de inmediato.
+
+🍕 [CUERPO SENSORIAL DEL COPY]
+Redacta el cuerpo principal explotando los sentidos (vista, olfato, sabor) y aplicando el ángulo psicológico seleccionado. Hablá directamente al cliente en segunda persona.
+
+🚀 [LLAMADO A LA ACCIÓN (CTA DIRECTO)]
+Indica claramente cómo pedir directo en la PWA Web con Mercado Pago (ej: "👉 Pedí en 1 min en fluna.app").
+
+🏷️ [HASHTAGS ESTRATÉGICOS GEO/SEO]
+Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPizzeria #PizzaMasaMadre #DeliveryArgentina).`;
+
+    // UI Loading state
+    if (btnIcon) btnIcon.className = 'fa-solid fa-spinner fa-spin';
+    if (btnText) btnText.innerText = 'Generando con Gemini IA...';
+    if (outputEl) outputEl.value = '🧠 Gemini IA está diseñando la estrategia de copywriting y psicología de ventas para FLuna...';
+
+    const { data, error } = await FlunaDB.generateGeminiContent(prompt);
+
+    // Restore UI state
+    if (btnIcon) btnIcon.className = 'fa-solid fa-wand-magic-sparkles';
+    if (btnText) btnText.innerText = 'Generar Campaña con Gemini IA ✨';
+
+    if (error || !data) {
+      alert('No se pudo conectar con Gemini API. Se utilizará plantilla de respaldo.');
+      const fallbackText = `📐 [ESPECIFICACIONES VISUALES Y FOTOGRAFÍA]\n- Formato: ${dimensions}\n- Estilo: Fotografía cenital con iluminación cálida sobre fondo negro neón (#E96D25).\n\n🎯 [HOOK PERSUASIVO]\n¿Buscás la combinación perfecta para esta noche? 🍕✨\n\n🍕 [CUERPO SENSORIAL]\nProbá "${prod.name}": masa madre con 48hs de fermentación lenta, abundantes ingredientes seleccionados y el inigualable toque del horno de piedra.\n\n🚀 [LLAMADO A LA ACCIÓN]\n👉 Hacé tu pedido en 1 minuto desde nuestra PWA con Mercado Pago:\nhttps://fluna.app\n\n🏷️ [HASHTAGS]\n#FLunaPizzeria #${prod.name.replace(/ /g, '')} #MasaMadre #PizzeriaArtesanal #MercadoPago`;
+      if (outputEl) outputEl.value = fallbackText;
+      return;
+    }
+
+    if (outputEl) outputEl.value = data;
+
+    // Guardar en Historial
+    const historyItem = {
+      id: 'mk-' + Date.now(),
+      productName: prod.name,
+      format: isStory ? 'Story (9:16)' : 'Feed (4:5)',
+      angle: angle,
+      date: new Date().toLocaleString('es-AR'),
+      content: data
+    };
+
+    this.state.marketingHistory.unshift(historyItem);
+    if (this.state.marketingHistory.length > 20) this.state.marketingHistory.pop();
+    localStorage.setItem('fluna_mk_history', JSON.stringify(this.state.marketingHistory));
+
+    this.renderMarketingHistory();
+  },
+
+  copyMarketingOutput() {
+    const output = document.getElementById('mkCopyOutput')?.value;
+    if (!output) return;
+
+    navigator.clipboard.writeText(output).then(() => {
+      alert('¡Copy copiado exitosamente al portapapeles!');
+    }).catch(() => {
+      alert('No se pudo copiar automáticamente. Por favor selecciónalo manualmente.');
+    });
+  },
+
+  renderMarketingHistory() {
+    const container = document.getElementById('mkHistoryContainer');
+    if (!container) return;
+
+    if (this.state.marketingHistory.length === 0) {
+      container.innerHTML = `<div class="col-span-full text-center text-xs text-slate-500 py-6 font-mono">Sin campañas generadas previamente.</div>`;
+      return;
+    }
+
+    container.innerHTML = this.state.marketingHistory.map(item => `
+      <div class="glass-card p-4 space-y-2 border border-white/5 hover:border-orange-500/40 transition text-xs">
+        <div class="flex items-center justify-between">
+          <span class="font-bold text-white truncate">${item.productName}</span>
+          <span class="text-[10px] font-mono text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20">${item.format}</span>
+        </div>
+        <p class="text-[10px] text-slate-400 line-clamp-2 font-mono">${item.content.substring(0, 120)}...</p>
+        <div class="flex justify-between items-center pt-2 border-t border-white/5 text-[10px] font-mono">
+          <span class="text-slate-500">${item.date}</span>
+          <button onclick="FlunaAdmin.loadMarketingHistoryItem('${item.id}')" class="text-orange-400 font-bold hover:underline">Ver / Cargar</button>
+        </div>
+      </div>
+    `).join('');
+  },
+
+  loadMarketingHistoryItem(id) {
+    const item = this.state.marketingHistory.find(i => i.id === id);
+    if (item && document.getElementById('mkCopyOutput')) {
+      document.getElementById('mkCopyOutput').value = item.content;
+    }
+  },
+
+  clearMarketingHistory() {
+    if (confirm('¿Vaciar el historial de campañas de marketing?')) {
+      this.state.marketingHistory = [];
+      localStorage.removeItem('fluna_mk_history');
+      this.renderMarketingHistory();
     }
   },
 
