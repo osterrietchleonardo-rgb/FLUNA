@@ -1114,7 +1114,7 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
     }
 
     container.innerHTML = this.state.marketingHistory.map(item => `
-      <div class="glass-card p-4 space-y-2 border border-white/5 hover:border-orange-500/40 transition text-xs">
+      <div class="glass-card p-4 space-y-2 border border-white/5 hover:border-orange-500/40 transition text-xs relative group">
         <div class="flex items-center justify-between">
           <span class="font-bold text-white truncate">${item.productName}</span>
           <span class="text-[10px] font-mono text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20">${item.format}</span>
@@ -1122,10 +1122,21 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
         <p class="text-[10px] text-slate-400 line-clamp-2 font-mono">${item.content.substring(0, 120)}...</p>
         <div class="flex justify-between items-center pt-2 border-t border-white/5 text-[10px] font-mono">
           <span class="text-slate-500">${item.date}</span>
-          <button onclick="FlunaAdmin.loadMarketingHistoryItem('${item.id}')" class="text-orange-400 font-bold hover:underline">Ver / Cargar</button>
+          <div class="flex items-center gap-2">
+            <button onclick="FlunaAdmin.loadMarketingHistoryItem('${item.id}')" class="text-orange-400 font-bold hover:underline">Ver / Cargar</button>
+            <button onclick="FlunaAdmin.deleteMarketingHistoryItem('${item.id}')" class="text-slate-400 hover:text-rose-400 transition p-1" title="Eliminar tarjeta">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
         </div>
       </div>
     `).join('');
+  },
+
+  deleteMarketingHistoryItem(id) {
+    this.state.marketingHistory = this.state.marketingHistory.filter(item => item.id !== id);
+    localStorage.setItem('fluna_mk_history', JSON.stringify(this.state.marketingHistory));
+    this.renderMarketingHistory();
   },
 
   loadMarketingHistoryItem(id) {
