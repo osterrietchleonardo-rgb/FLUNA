@@ -21,7 +21,8 @@ const FlunaAdmin = {
     chatSearchQuery: '',
     archivedCustomers: JSON.parse(localStorage.getItem('fluna_archived_chats') || '[]'),
     chatTimer: null,
-    marketingHistory: JSON.parse(localStorage.getItem('fluna_mk_history') || '[]')
+    marketingHistory: JSON.parse(localStorage.getItem('fluna_mk_history') || '[]'),
+    manualOrderItems: {}
   },
 
   init() {
@@ -381,7 +382,15 @@ const FlunaAdmin = {
           <img src="${prod.image_url || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600'}" class="w-10 h-10 object-cover rounded-lg">
         </td>
         <td class="p-3 font-bold text-white">${prod.name}</td>
-        <td class="p-3 text-slate-400">${prod.category}</td>
+        <td class="p-3">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+            prod.category === 'Combos' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+            prod.category === 'Ofertas' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+            'text-slate-400'
+          }">
+            ${prod.category === 'Combos' ? '⚡ Combos' : prod.category === 'Ofertas' ? '🔥 Ofertas' : prod.category}
+          </span>
+        </td>
         <td class="p-3 font-mono font-bold text-orange-400">$${Number(prod.price).toLocaleString('es-AR')}</td>
         <td class="p-3 font-mono text-white">${prod.available_stock} u</td>
         <td class="p-3">
@@ -1679,6 +1688,174 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
         }
       });
     }
+  },
+
+  // --- GESTIÓN DE PEDIDOS MANUALES (PIPELINE) ---
+  openManualOrderModal() {
+    this.state.manualOrderItems = {};
+    const form = document.getElementById('manualOrderForm');
+    if (form) form.reset();
+
+    const addressContainer = document.getElementById('manualAddressContainer');
+    if (addressContainer) addressContainer.classList.add('hidden');
+
+    this.renderManualOrderProducts();
+    this.updateManualOrderTotal();
+
+    const modal = document.getElementById('manualOrderModal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+  },
+
+  toggleManualAddressField() {
+    const deliveryType = document.getElementById('manualOrderDeliveryType')?.value;
+    const addressContainer = document.getElementById('manualAddressContainer');
+    const addressInput = document.getElementById('manualOrderAddress');
+
+    if (deliveryType === 'delivery') {
+      addressContainer?.classList.remove('hidden');
+      if (addressInput) addressInput.required = true;
+    } else {
+      addressContainer?.classList.add('hidden');
+      if (addressInput) {
+        addressInput.required = false;
+        addressInput.value = '';
+      }
+    }
+  },
+
+  renderManualOrderProducts() {
+    const container = document.getElementById('manualOrderProductsList');
+    if (!container) return;
+
+    if (!this.state.products || this.state.products.length === 0) {
+      container.innerHTML = `<p class="text-slate-400 italic text-center py-2">No hay productos activos en el menú.</p>`;
+      return;
+    }
+
+    const activeProds = this.state.products.filter(p => p.is_active);
+
+    container.innerHTML = activeProds.map(prod => {
+      const qty = this.state.manualOrderItems[prod.id] || 0;
+      return `
+        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-white/5">
+          <div class="flex items-center gap-2">
+            <img src="${prod.image_url || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600'}" class="w-8 h-8 object-cover rounded">
+            <div>
+              <span class="font-bold text-white block truncate max-w-[200px]">${prod.name}</span>
+              <span class="text-[10px] font-mono text-orange-400">$${Number(prod.price).toLocaleString('es-AR')}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="FlunaAdmin.updateManualOrderQty('${prod.id}', -1)" class="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center">-</button>
+            <span id="manualQty_${prod.id}" class="font-mono font-bold text-white w-5 text-center">${qty}</span>
+            <button type="button" onclick="FlunaAdmin.updateManualOrderQty('${prod.id}', 1)" class="w-6 h-6 rounded bg-orange-500 hover:bg-orange-600 text-white font-bold flex items-center justify-center">+</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  },
+
+  updateManualOrderQty(productId, delta) {
+    const current = this.state.manualOrderItems[productId] || 0;
+    const next = Math.max(0, current + delta);
+    this.state.manualOrderItems[productId] = next;
+
+    const qtyEl = document.getElementById(\`manualQty_\${productId}\`);
+    if (qtyEl) qtyEl.innerText = next;
+
+    this.updateManualOrderTotal();
+  },
+
+  updateManualOrderTotal() {
+    let total = 0;
+    Object.keys(this.state.manualOrderItems).forEach(prodId => {
+      const qty = this.state.manualOrderItems[prodId];
+      if (qty > 0) {
+        const prod = this.state.products.find(p => p.id === prodId);
+        if (prod) total += Number(prod.price) * qty;
+      }
+    });
+
+    const display = document.getElementById('manualOrderTotalDisplay');
+    if (display) display.innerText = \`$\${total.toLocaleString('es-AR')}\`;
+    return total;
+  },
+
+  async handleSaveManualOrder(e) {
+    e.preventDefault();
+
+    const customerName = document.getElementById('manualOrderCustomer').value.trim();
+    const phone = document.getElementById('manualOrderPhone').value.trim();
+    const deliveryType = document.getElementById('manualOrderDeliveryType').value;
+    const paymentMethod = document.getElementById('manualOrderPaymentMethod').value;
+    const paymentStatus = document.getElementById('manualOrderPaymentStatus').value;
+    const orderStatus = document.getElementById('manualOrderStatus').value;
+    const notes = document.getElementById('manualOrderNotes').value.trim();
+    const address = deliveryType === 'delivery' ? document.getElementById('manualOrderAddress').value.trim() : 'Retiro en Local';
+
+    const selectedItems = [];
+    Object.keys(this.state.manualOrderItems).forEach(prodId => {
+      const qty = this.state.manualOrderItems[prodId];
+      if (qty > 0) {
+        const prod = this.state.products.find(p => p.id === prodId);
+        if (prod) {
+          selectedItems.push({
+            product_id: prod.id,
+            name: prod.name,
+            price: Number(prod.price),
+            quantity: qty
+          });
+        }
+      }
+    });
+
+    if (selectedItems.length === 0) {
+      alert('Por favor selecciona al menos 1 producto para crear el pedido.');
+      return;
+    }
+
+    const totalAmount = this.updateManualOrderTotal();
+    const newOrderId = 'FL-' + Math.floor(1000 + Math.random() * 9000);
+
+    const orderData = {
+      id: newOrderId,
+      customer_id: 'MANUAL_ADMIN',
+      customer_name: customerName,
+      customer_phone: phone,
+      customer_email: 'manual@fluna.local',
+      delivery_address: address,
+      delivery_type: deliveryType,
+      total_amount: totalAmount,
+      status: orderStatus,
+      payment_status: paymentStatus,
+      payment_method: paymentMethod,
+      notes: notes ? `[PEDIDO MANUAL] ${notes}` : '[PEDIDO MANUAL POR MOSTRADOR/TELÉFONO]'
+    };
+
+    const res = await FlunaDB.createOrder(orderData, selectedItems);
+    if (res.error) {
+      alert('Error al registrar el pedido manual: ' + res.error.message);
+      return;
+    }
+
+    if (paymentStatus === 'approved') {
+      await FlunaDB.addFinanceRecord({
+        type: 'income',
+        category: 'sales',
+        amount: totalAmount,
+        description: `Venta Manual #${newOrderId} - ${customerName}`,
+        date: new Date().toISOString().split('T')[0]
+      });
+    }
+
+    document.getElementById('manualOrderModal')?.classList.add('hidden');
+    document.getElementById('manualOrderModal')?.classList.remove('flex');
+
+    alert(`¡Pedido manual #${newOrderId} creado exitosamente en la etapa "${orderStatus}"!`);
+    await this.loadAllData();
   }
 };
 

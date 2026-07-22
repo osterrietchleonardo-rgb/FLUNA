@@ -281,8 +281,12 @@ const FlunaApp = {
           <img src="${product.image_url || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600'}" 
                alt="${product.name}" 
                class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
-          <div class="absolute top-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-xs font-mono font-bold text-orange-400 border border-orange-500/30">
-            ${product.category}
+          <div class="absolute top-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-xs font-mono font-bold border ${
+            product.category === 'Combos' ? 'text-amber-400 border-amber-500/50 bg-amber-950/80 shadow-[0_0_15px_rgba(245,158,11,0.3)]' :
+            product.category === 'Ofertas' ? 'text-rose-400 border-rose-500/50 bg-rose-950/80 shadow-[0_0_15px_rgba(244,63,94,0.3)] animate-pulse' :
+            'text-orange-400 border-orange-500/30'
+          }">
+            ${product.category === 'Combos' ? '⚡ COMBO PROMO' : product.category === 'Ofertas' ? '🔥 OFERTA' : product.category}
           </div>
           ${product.available_stock <= 5 ? `
             <div class="absolute top-3 right-3 bg-rose-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">

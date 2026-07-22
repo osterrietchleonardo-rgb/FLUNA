@@ -150,7 +150,18 @@
 
     <!-- SECTION 2: KANBAN BOARD -->
     <section id="section-kanban" class="admin-section hidden space-y-4">
-      <h3 class="text-lg font-bold text-white font-mono">Tablero Kanban de Pedidos (Realtime)</h3>
+      <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-2 border-b border-white/10">
+        <div>
+          <h3 class="text-lg font-bold text-white font-mono flex items-center gap-2">
+            <i class="fa-solid fa-square-kanban text-orange-500"></i> Tablero Kanban de Pedidos (Pipeline)
+          </h3>
+          <p class="text-xs text-slate-400">Gestioná el flujo de producción en tiempo real o registrá un pedido de mostrador / telefónico.</p>
+        </div>
+        <button onclick="FlunaAdmin.openManualOrderModal()" class="btn-fluna py-2.5 px-4 text-xs font-bold flex items-center gap-2 shadow-lg hover:scale-105 transition">
+          <i class="fa-solid fa-plus-circle text-sm"></i> + Crear Pedido Manual
+        </button>
+      </div>
+
       <div class="flex gap-3 overflow-x-auto pb-4 w-full">
         
         <div class="kanban-column space-y-3">
@@ -218,9 +229,10 @@
             <option value="Todas">Todas las categorías</option>
             <option value="Pizzas">Pizzas</option>
             <option value="Empanadas">Empanadas</option>
+            <option value="Combos">⚡ Combos</option>
+            <option value="Ofertas">🔥 Ofertas & Promos</option>
             <option value="Bebidas">Bebidas</option>
             <option value="Postres">Postres</option>
-            <option value="Combos">Combos</option>
           </select>
 
           <button onclick="document.getElementById('productFormModal').classList.remove('hidden'); document.getElementById('productFormModal').classList.add('flex'); document.getElementById('productForm').reset(); document.getElementById('prodFormId').value='';" class="btn-fluna py-2 px-4 text-xs font-bold flex items-center gap-2">
@@ -754,9 +766,10 @@
             <select id="prodFormCategory" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
               <option value="Pizzas">Pizzas</option>
               <option value="Empanadas">Empanadas</option>
+              <option value="Combos">⚡ Combos Especiales</option>
+              <option value="Ofertas">🔥 Oferta & Descuento</option>
               <option value="Bebidas">Bebidas</option>
               <option value="Postres">Postres</option>
-              <option value="Combos">Combos</option>
             </select>
           </div>
           <div>
@@ -1019,6 +1032,91 @@
           <button onclick="document.getElementById('adminOrderDetailModal').classList.add('hidden')" class="btn-fluna py-2 px-4 text-xs font-bold">Cerrar</button>
         </div>
       </div>
+  <!-- MODAL: Crear Pedido Manual (Pipeline Admin) -->
+  <div id="manualOrderModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden items-center justify-center p-4">
+    <div class="glass-panel w-full max-w-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto border border-orange-500/30">
+      <div class="flex justify-between items-center border-b border-white/10 pb-3">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-cash-register text-orange-400"></i> Nuevo Pedido Manual (Mostrador / Teléfono)
+        </h3>
+        <button onclick="document.getElementById('manualOrderModal').classList.add('hidden'); document.getElementById('manualOrderModal').classList.remove('flex');" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <form id="manualOrderForm" onsubmit="FlunaAdmin.handleSaveManualOrder(event)" class="space-y-4 text-xs">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Nombre del Cliente *</label>
+            <input type="text" id="manualOrderCustomer" required placeholder="Ej: Maria Lopez" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Teléfono / WhatsApp *</label>
+            <input type="tel" id="manualOrderPhone" required placeholder="Ej: 1198765432" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Tipo de Entrega</label>
+            <select id="manualOrderDeliveryType" onchange="FlunaAdmin.toggleManualAddressField()" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+              <option value="pickup">🛍️ Retiro en Local / Mostrador</option>
+              <option value="delivery">🛵 Envío a Domicilio</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Método de Pago</label>
+            <select id="manualOrderPaymentMethod" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+              <option value="cash">💵 Efectivo</option>
+              <option value="transfer">🏦 Transferencia / Alias</option>
+              <option value="mercadopago">💳 Mercado Pago</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Estado del Pago</label>
+            <select id="manualOrderPaymentStatus" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+              <option value="approved">✅ Pagado (Aprobado)</option>
+              <option value="pending">⏳ Pendiente de Pago</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="manualAddressContainer" class="hidden">
+          <label class="block font-bold text-slate-300 mb-1">Dirección de Entrega *</label>
+          <input type="text" id="manualOrderAddress" placeholder="Ej: Av. Santa Fe 2450, 4B" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Etapa Inicial en el Pipeline (Kanban)</label>
+          <select id="manualOrderStatus" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+            <option value="Aprobada">3. Aprobada (Listo para cocina)</option>
+            <option value="En cocina">4. En Cocina</option>
+            <option value="Solicitado">1. Solicitado</option>
+            <option value="Falta de pago">2. Falta Pago</option>
+          </select>
+        </div>
+
+        <!-- Selección de Productos del Menú -->
+        <div class="space-y-2 border-t border-white/10 pt-3">
+          <label class="block font-bold text-slate-300">Seleccionar Productos del Menú:</label>
+          <div id="manualOrderProductsList" class="space-y-2 max-h-48 overflow-y-auto bg-slate-950 p-3 rounded-xl border border-white/5">
+            <!-- Carga dinámica por JS -->
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Notas u Observaciones del Pedido</label>
+          <input type="text" id="manualOrderNotes" placeholder="Ej: Sin orégano, bien cocida" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+        </div>
+
+        <div class="flex items-center justify-between border-t border-white/10 pt-4">
+          <div>
+            <span class="text-xs text-slate-400 font-mono block">Total Calculado</span>
+            <span id="manualOrderTotalDisplay" class="text-2xl font-black font-mono text-orange-400">$0</span>
+          </div>
+          <button type="submit" class="btn-fluna py-3 px-6 text-xs font-bold flex items-center gap-2 shadow-lg">
+            <i class="fa-solid fa-check"></i> Confirmar y Crear Pedido
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
