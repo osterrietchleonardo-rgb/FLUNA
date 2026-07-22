@@ -480,6 +480,10 @@ const FlunaAdmin = {
         <td class="p-3 font-bold ${f.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}">
           ${f.type === 'income' ? '+' : '-'}$${Number(f.amount).toLocaleString('es-AR')}
         </td>
+        <td class="p-3 space-x-2 font-sans">
+          <button onclick="FlunaAdmin.editFinance('${f.id}')" class="text-sky-400 hover:text-sky-300"><i class="fa-solid fa-pen-to-square"></i></button>
+          <button onclick="FlunaAdmin.deleteFinance('${f.id}')" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button>
+        </td>
       </tr>
     `).join('');
 
@@ -489,6 +493,7 @@ const FlunaAdmin = {
 
   async handleSaveFinance(e) {
     e.preventDefault();
+    const id = document.getElementById('finFormId').value;
     const record = {
       type: document.getElementById('finType').value,
       category: document.getElementById('finCategory').value,
@@ -497,9 +502,39 @@ const FlunaAdmin = {
       date: document.getElementById('finDate').value || new Date().toISOString().split('T')[0]
     };
 
-    await FlunaDB.addFinanceRecord(record);
+    if (id) {
+      await FlunaDB.updateFinanceRecord(id, record);
+    } else {
+      await FlunaDB.addFinanceRecord(record);
+    }
     document.getElementById('financeModal').classList.add('hidden');
     this.loadAllData();
+  },
+
+  editFinance(id) {
+    const fin = this.state.finances.find(f => f.id === id);
+    if (!fin) return;
+
+    document.getElementById('finFormId').value = fin.id;
+    document.getElementById('finType').value = fin.type;
+    document.getElementById('finCategory').value = fin.category;
+    document.getElementById('finAmount').value = fin.amount;
+    document.getElementById('finDesc').value = fin.description;
+    document.getElementById('finDate').value = fin.date;
+
+    const titleEl = document.getElementById('financeModalTitle');
+    if (titleEl) titleEl.innerText = 'Editar Movimiento Financiero';
+
+    const modal = document.getElementById('financeModal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  },
+
+  async deleteFinance(id) {
+    if (confirm('¿Estás seguro de que deseas eliminar este registro financiero? Se recalcularán las métricas automáticamente.')) {
+      await FlunaDB.deleteFinanceRecord(id);
+      this.loadAllData();
+    }
   },
 
   // --- STOCK E INGREDIENTES ---

@@ -146,6 +146,18 @@ const FlunaDB = {
     return await client.from('finances').insert([record]).select();
   },
 
+  async updateFinanceRecord(id, record) {
+    const client = getSupabaseClient();
+    if (!client) return { error: { message: 'Sin cliente DB' } };
+    return await client.from('finances').update(record).eq('id', id).select();
+  },
+
+  async deleteFinanceRecord(id) {
+    const client = getSupabaseClient();
+    if (!client) return { error: { message: 'Sin cliente DB' } };
+    return await client.from('finances').delete().eq('id', id);
+  },
+
   // --- CHAT MENSAJES (REALTIME) ---
   async getMessages(customerId) {
     const client = getSupabaseClient();

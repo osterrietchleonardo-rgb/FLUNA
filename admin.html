@@ -271,7 +271,7 @@
       <div id="finTabRegistro" class="space-y-4">
         <div class="flex justify-between items-center">
           <h4 class="text-xs font-bold text-slate-400 font-mono uppercase tracking-wider">Historial de Transacciones</h4>
-          <button onclick="document.getElementById('financeModal').classList.remove('hidden'); document.getElementById('financeModal').classList.add('flex');" class="btn-fluna py-2 px-4 text-xs font-bold flex items-center gap-2">
+          <button onclick="document.getElementById('financeModal').classList.remove('hidden'); document.getElementById('financeModal').classList.add('flex'); document.getElementById('financeForm').reset(); document.getElementById('finFormId').value=''; document.getElementById('financeModalTitle').innerText='Registrar Movimiento Financiero';" class="btn-fluna py-2 px-4 text-xs font-bold flex items-center gap-2">
             <i class="fa-solid fa-plus"></i> Registrar Movimiento
           </button>
         </div>
@@ -283,6 +283,7 @@
                 <th class="p-3">Descripción</th>
                 <th class="p-3">Categoría</th>
                 <th class="p-3">Monto</th>
+                <th class="p-3">Acciones</th>
               </tr>
             </thead>
             <tbody id="financesTableBody">
@@ -661,15 +662,16 @@
     </div>
   </div>
 
-  <!-- MODAL: Nuevo Registro Financiero -->
+  <!-- MODAL: Nuevo/Editar Registro Financiero -->
   <div id="financeModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden items-center justify-center p-4">
     <div class="glass-panel w-full max-w-md p-6 space-y-4">
       <div class="flex justify-between items-center border-b border-white/10 pb-3">
-        <h3 class="text-lg font-bold text-white">Nuevo Registro Financiero</h3>
+        <h3 id="financeModalTitle" class="text-lg font-bold text-white">Registrar Movimiento Financiero</h3>
         <button onclick="document.getElementById('financeModal').classList.add('hidden')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
       <form id="financeForm" class="space-y-3 text-xs">
+        <input type="hidden" id="finFormId">
         <div>
           <label class="block font-bold text-slate-300 mb-1">Tipo de Movimiento</label>
           <select id="finType" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
