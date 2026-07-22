@@ -174,6 +174,18 @@ const FlunaDB = {
     return await client.from('messages').insert([msgData]).select();
   },
 
+  async deleteCustomerMessages(customerId) {
+    const client = getSupabaseClient();
+    if (!client) return { error: { message: 'Sin cliente DB' } };
+    return await client.from('messages').delete().eq('customer_id', customerId);
+  },
+
+  async markMessagesAsRead(customerId) {
+    const client = getSupabaseClient();
+    if (!client) return { error: { message: 'Sin cliente DB' } };
+    return await client.from('messages').update({ read: true }).eq('customer_id', customerId).eq('read', false);
+  },
+
   // --- SUSCRIPCIONES EN TIEMPO REAL (REALTIME) ---
   subscribeOrders(onOrderChange) {
     const client = getSupabaseClient();

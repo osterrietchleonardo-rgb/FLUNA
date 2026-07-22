@@ -16,7 +16,11 @@ const FlunaAdmin = {
     messages: [],
     activeTab: 'dashboard',
     charts: {},
-    activeChatCustomer: null
+    activeChatCustomer: null,
+    chatFilter: 'all',
+    chatSearchQuery: '',
+    archivedCustomers: JSON.parse(localStorage.getItem('fluna_archived_chats') || '[]'),
+    chatTimer: null
   },
 
   init() {
@@ -97,6 +101,12 @@ const FlunaAdmin = {
     document.getElementById('adminProdSearch')?.addEventListener('input', () => this.renderProductsTable());
     document.getElementById('adminProdCatFilter')?.addEventListener('change', () => this.renderProductsTable());
 
+    // Buscador de Chats
+    document.getElementById('chatSearchInput')?.addEventListener('input', (e) => {
+      this.state.chatSearchQuery = e.target.value.toLowerCase().trim();
+      this.renderChatCenter();
+    });
+
     // CRUD Insumos y buscador de compras
     document.getElementById('ingredientForm')?.addEventListener('submit', (e) => this.handleSaveIngredient(e));
     document.getElementById('purchaseIngSearch')?.addEventListener('input', () => this.filterPurchaseIngredientsDropdown());
@@ -104,6 +114,11 @@ const FlunaAdmin = {
 
   switchTab(tabId) {
     this.state.activeTab = tabId;
+
+    if (this.state.chatTimer) {
+      clearInterval(this.state.chatTimer);
+      this.state.chatTimer = null;
+    }
 
     document.querySelectorAll('.admin-nav-item').forEach(el => {
       const isCurrent = el.dataset.tab === tabId;
@@ -126,7 +141,10 @@ const FlunaAdmin = {
     if (tabId === 'products') this.renderProductsTable();
     if (tabId === 'finances') this.renderFinancesSection();
     if (tabId === 'stock') this.renderStockSection();
-    if (tabId === 'chat') this.renderChatCenter();
+    if (tabId === 'chat') {
+      this.renderChatCenter();
+      this.state.chatTimer = setInterval(() => this.refreshChatDataSilently(), 10000);
+    }
   },
 
   async loadAllData() {
@@ -620,41 +638,214 @@ const FlunaAdmin = {
   },
 
   // --- CHAT DE ATENCIÓN DE CLIENTES ---
+  setChatFilter(filter) {
+    this.state.chatFilter = filter;
+
+    const tabs = ['all', 'unread', 'web', 'archived'];
+    tabs.forEach(t => {
+      const btn = document.getElementById(`chatTab${t.charAt(0).toUpperCase() + t.slice(1)}`);
+      if (!btn) return;
+      const isCur = t === filter;
+      btn.classList.toggle('bg-orange-500', isCur);
+      btn.classList.toggle('text-white', isCur);
+      btn.classList.toggle('font-bold', isCur);
+      btn.classList.toggle('text-slate-400', !isCur);
+    });
+
+    this.renderChatCenter();
+  },
+
+  async refreshChatDataSilently() {
+    const messagesRes = await FlunaDB.getAllMessages();
+    if (messagesRes.data) {
+      this.state.messages = messagesRes.data;
+      this.renderChatCenter();
+      if (this.state.activeChatCustomer) {
+        this.renderChatTimeline();
+      }
+    }
+  },
+
+  getCustomerLatestOrder(customerId, customerName) {
+    const match = this.state.orders.find(o => 
+      o.customer_id === customerId || 
+      (customerName && o.customer_name && o.customer_name.toLowerCase() === customerName.toLowerCase())
+    );
+    return match ? { id: match.id, status: match.status } : null;
+  },
+
   renderChatCenter() {
     const listContainer = document.getElementById('chatCustomerList');
     if (!listContainer) return;
 
     // Agrupar mensajes por cliente
     const customerMap = {};
+    let totalUnreadOverall = 0;
+
     this.state.messages.forEach(m => {
       if (!customerMap[m.customer_id]) {
-        customerMap[m.customer_id] = { name: m.customer_name, lastMsg: m.message, time: m.created_at };
+        customerMap[m.customer_id] = { 
+          id: m.customer_id, 
+          name: m.customer_name, 
+          lastMsg: m.message, 
+          time: m.created_at,
+          unreadCount: 0
+        };
       } else {
         customerMap[m.customer_id].lastMsg = m.message;
         customerMap[m.customer_id].time = m.created_at;
       }
+
+      if (m.sender_role === 'customer' && !m.read) {
+        customerMap[m.customer_id].unreadCount++;
+        totalUnreadOverall++;
+      }
     });
 
-    const customers = Object.keys(customerMap);
+    // Actualizar badge global de no leídos en pestaña
+    const totalUnreadBadge = document.getElementById('chatUnreadTotalBadge');
+    if (totalUnreadBadge) {
+      if (totalUnreadOverall > 0) {
+        totalUnreadBadge.innerText = totalUnreadOverall;
+        totalUnreadBadge.classList.remove('hidden');
+      } else {
+        totalUnreadBadge.classList.add('hidden');
+      }
+    }
 
-    if (customers.length === 0) {
-      listContainer.innerHTML = `<div class="p-4 text-xs text-slate-500 text-center">Sin conversaciones de clientes.</div>`;
+    let customerIds = Object.keys(customerMap);
+    const search = this.state.chatSearchQuery;
+    const filter = this.state.chatFilter;
+    const archived = this.state.archivedCustomers;
+
+    // Aplicar filtros
+    customerIds = customerIds.filter(cId => {
+      const cust = customerMap[cId];
+      const isArchived = archived.includes(cId);
+
+      // Filtro por búsqueda
+      if (search) {
+        const matchesName = cust.name.toLowerCase().includes(search);
+        const matchesMsg = cust.lastMsg.toLowerCase().includes(search);
+        if (!matchesName && !matchesMsg) return false;
+      }
+
+      // Filtros de pestaña
+      if (filter === 'archived') return isArchived;
+      if (isArchived) return false; // En las otras pestañas excluir archivados
+
+      if (filter === 'unread') return cust.unreadCount > 0;
+      if (filter === 'web') return true; // Todos los chats provienen de la PWA Web
+
+      return true;
+    });
+
+    if (customerIds.length === 0) {
+      listContainer.innerHTML = `<div class="p-6 text-xs text-slate-500 text-center space-y-2"><i class="fa-solid fa-comments text-2xl text-slate-600 block mb-1"></i>Sin conversaciones en este filtro.</div>`;
       return;
     }
 
-    listContainer.innerHTML = customers.map(cId => `
-      <div onclick="FlunaAdmin.selectChatCustomer('${cId}')" 
-           class="p-3 border-b border-white/5 hover:bg-slate-900/60 cursor-pointer ${this.state.activeChatCustomer === cId ? 'bg-orange-500/10 border-l-4 border-l-orange-500' : ''}">
-        <h5 class="text-xs font-bold text-white">${customerMap[cId].name}</h5>
-        <p class="text-[11px] text-slate-400 truncate">${customerMap[cId].lastMsg}</p>
-      </div>
-    `).join('');
+    listContainer.innerHTML = customerIds.map(cId => {
+      const cust = customerMap[cId];
+      const order = this.getCustomerLatestOrder(cust.id, cust.name);
+      const isSelected = this.state.activeChatCustomer === cId;
+
+      return `
+        <div onclick="FlunaAdmin.selectChatCustomer('${cId}')" 
+             class="p-3.5 border-b border-white/5 hover:bg-slate-900/80 cursor-pointer transition relative ${isSelected ? 'bg-orange-500/10 border-l-4 border-l-orange-500' : ''}">
+          <div class="flex items-center justify-between gap-1 mb-1">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <h5 class="text-xs font-bold text-white truncate">${cust.name}</h5>
+              <span class="tag-web-channel flex-shrink-0">WEB</span>
+            </div>
+            ${cust.unreadCount > 0 ? `<span class="unread-bubble">${cust.unreadCount}</span>` : ''}
+          </div>
+
+          <p class="text-[11px] text-slate-400 truncate mb-2">${cust.lastMsg}</p>
+
+          <div class="flex items-center justify-between text-[10px]">
+            ${order ? `
+              <span class="chat-order-pill text-orange-400 font-bold flex items-center gap-1">
+                <i class="fa-solid fa-receipt text-[9px]"></i> #${order.id} • ${order.status}
+              </span>
+            ` : `
+              <span class="chat-order-pill text-slate-500">Sin pedido activo</span>
+            `}
+            <span class="text-slate-500 font-mono text-[9px]">${new Date(cust.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
   },
 
-  selectChatCustomer(customerId) {
+  async selectChatCustomer(customerId) {
     this.state.activeChatCustomer = customerId;
+
+    // Marcar como leídos en BD y en estado local
+    await FlunaDB.markMessagesAsRead(customerId);
+    this.state.messages.forEach(m => {
+      if (m.customer_id === customerId) m.read = true;
+    });
+
+    const custMsg = this.state.messages.find(m => m.customer_id === customerId);
+    const custName = custMsg ? custMsg.customer_name : 'Cliente';
+    const order = this.getCustomerLatestOrder(customerId, custName);
+
+    // Mostrar cabecera y formulario
+    const header = document.getElementById('activeChatHeader');
+    const form = document.getElementById('adminChatForm');
+    const nameEl = document.getElementById('activeChatCustomerName');
+    const pillEl = document.getElementById('activeChatOrderPill');
+    const btnArchiveText = document.getElementById('btnArchiveChatText');
+
+    if (header) header.classList.remove('hidden');
+    if (form) form.classList.remove('hidden');
+    if (nameEl) nameEl.innerText = custName;
+    if (pillEl) {
+      pillEl.innerHTML = order ? `
+        <span class="chat-order-pill text-orange-400 font-bold inline-flex items-center gap-1">
+          <i class="fa-solid fa-receipt"></i> Pedido #${order.id} • Estado: ${order.status}
+        </span>
+      ` : `<span class="chat-order-pill text-slate-500">Sin pedido activo vinculado</span>`;
+    }
+
+    const isArchived = this.state.archivedCustomers.includes(customerId);
+    if (btnArchiveText) btnArchiveText.innerText = isArchived ? 'Desarchivar' : 'Archivar';
+
     this.renderChatCenter();
     this.renderChatTimeline();
+  },
+
+  toggleArchiveActiveCustomer() {
+    const cId = this.state.activeChatCustomer;
+    if (!cId) return;
+
+    const idx = this.state.archivedCustomers.indexOf(cId);
+    if (idx !== -1) {
+      this.state.archivedCustomers.splice(idx, 1);
+    } else {
+      this.state.archivedCustomers.push(cId);
+    }
+
+    localStorage.setItem('fluna_archived_chats', JSON.stringify(this.state.archivedCustomers));
+    this.selectChatCustomer(cId);
+  },
+
+  async deleteActiveCustomerChat() {
+    const cId = this.state.activeChatCustomer;
+    if (!cId) return;
+
+    if (confirm('¿Eliminar permanentemente todo el historial de mensajes de este cliente?')) {
+      await FlunaDB.deleteCustomerMessages(cId);
+      this.state.messages = this.state.messages.filter(m => m.customer_id !== cId);
+      this.state.activeChatCustomer = null;
+
+      document.getElementById('activeChatHeader')?.classList.add('hidden');
+      document.getElementById('adminChatForm')?.classList.add('hidden');
+      document.getElementById('adminChatTimeline').innerHTML = `<div class="text-center text-slate-500 text-xs py-24">Selecciona una conversación a la izquierda para interactuar.</div>`;
+
+      this.renderChatCenter();
+    }
   },
 
   renderChatTimeline() {
