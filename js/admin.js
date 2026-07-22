@@ -1768,7 +1768,7 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
     const next = Math.max(0, current + delta);
     this.state.manualOrderItems[productId] = next;
 
-    const qtyEl = document.getElementById(\`manualQty_\${productId}\`);
+    const qtyEl = document.getElementById(`manualQty_${productId}`);
     if (qtyEl) qtyEl.innerText = next;
 
     this.updateManualOrderTotal();
@@ -1785,7 +1785,7 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
     });
 
     const display = document.getElementById('manualOrderTotalDisplay');
-    if (display) display.innerText = \`$\${total.toLocaleString('es-AR')}\`;
+    if (display) display.innerText = `$${total.toLocaleString('es-AR')}`;
     return total;
   },
 
