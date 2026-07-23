@@ -830,11 +830,40 @@ const FlunaApp = {
       });
     }
 
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js')
-        .then(reg => console.log('Service Worker registrado:', reg.scope))
-        .catch(err => console.warn('Error registrando Service Worker:', err));
-    }
+    this.initServiceWorker();
+  },
+
+  /**
+   * Registro del Service Worker con auto-recuperación.
+   *
+   * Sin esto, un visitante que cargó el sitio con una versión defectuosa se
+   * queda con ella hasta que borre la caché a mano: el service worker viejo
+   * sigue controlando la pestaña aunque ya se haya publicado el arreglo.
+   * Acá, cuando entra a mandar un service worker nuevo, recargamos una vez.
+   */
+  initServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+
+    // Si no había controlador, es la primera visita: tomar el control no es
+    // una actualización y recargar sería un parpadeo innecesario.
+    const teniaControlador = Boolean(navigator.serviceWorker.controller);
+    let recargando = false;
+
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!teniaControlador || recargando) return;
+      recargando = true;
+      console.log('[FLuna] Versión nueva disponible, recargando…');
+      window.location.reload();
+    });
+
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => {
+        // Buscar actualizaciones al volver a la pestaña.
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') reg.update().catch(() => {});
+        });
+      })
+      .catch(err => console.warn('Error registrando Service Worker:', err));
   },
 
   // --- MÉTODOS AUXILIARES DE AUTH Y PERFIL ---

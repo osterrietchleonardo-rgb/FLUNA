@@ -5,7 +5,7 @@
    y subí CACHE_NAME, o los usuarios seguirán con la versión vieja.
    ============================================================ */
 
-const CACHE_NAME = 'fluna-pwa-v3';
+const CACHE_NAME = 'fluna-pwa-v4';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
