@@ -108,7 +108,7 @@ export default async function handler(req, res) {
       return res.status(409).json({
         ok: false,
         code: 'NOT_CONNECTED',
-        error: 'El local todavía no conectó su cuenta de Mercado Pago. Elegí efectivo o transferencia.'
+        error: 'El local todavía no conectó su cuenta de Mercado Pago. Elegí efectivo.'
       });
     }
 
