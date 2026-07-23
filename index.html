@@ -344,7 +344,7 @@
       </div>
 
       <button id="btnCheckout" class="w-full btn-fluna py-3.5 flex items-center justify-center gap-2 font-bold text-sm shadow-xl">
-        <span>¡Quiero mi pizza ya! 🚀</span>
+        <span>¡Confirmar mi Pedido! 🚀</span>
       </button>
     </div>
   </aside>
@@ -531,9 +531,23 @@
 
       <!-- Formulario Login/Registro -->
       <form id="authForm" class="space-y-4 text-xs">
-        <div id="authRegisterNameField" class="hidden">
-          <label class="block font-bold text-slate-300 mb-1">Nombre Completo *</label>
-          <input type="text" id="authName" placeholder="Tu nombre" class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-orange-500 focus:outline-none">
+        <div id="authRegisterExtraFields" class="hidden space-y-4">
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Nombre Completo *</label>
+            <input type="text" id="authName" placeholder="Tu nombre" class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-orange-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Celular *</label>
+            <input type="tel" id="authPhone" placeholder="Tu celular (ej. 11 1234 5678)" class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-orange-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Fecha de Nacimiento *</label>
+            <input type="date" id="authBirthdate" class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-orange-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Equipo de Fútbol Preferido *</label>
+            <input type="text" id="authTeam" placeholder="Ej: Boca, River, Racing..." class="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-orange-500 focus:outline-none">
+          </div>
         </div>
 
         <div>

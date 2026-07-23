@@ -320,7 +320,7 @@ const FlunaDB = {
   },
 
   // --- AUTENTICACIÓN (SUPABASE AUTH) ---
-  async signUp(email, password, fullName) {
+  async signUp(email, password, fullName, phone, birthdate, team) {
     const client = getSupabaseClient();
     if (!client) return noClient();
     return await client.auth.signUp({
@@ -329,7 +329,9 @@ const FlunaDB = {
       options: {
         data: {
           full_name: fullName,
-          phone: '',
+          phone: phone || '',
+          birthdate: birthdate || '',
+          football_team: team || '',
           address: ''
         }
       }

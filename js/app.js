@@ -349,6 +349,14 @@ const FlunaApp = {
   },
 
   openProductModal(productId) {
+    if (!this.state.customer.id) {
+      this.toggleAuthMode('login');
+      const authModal = document.getElementById('authModal');
+      authModal.classList.remove('hidden');
+      authModal.classList.add('flex');
+      return;
+    }
+
     const product = this.state.products.find(p => p.id === productId);
     if (!product) return;
 
@@ -421,6 +429,9 @@ const FlunaApp = {
     if (!cartItemsContainer) return;
 
     if (this.state.cart.length === 0) {
+      const btnCheckout = document.getElementById('btnCheckout');
+      if (btnCheckout) btnCheckout.classList.add('hidden');
+
       cartItemsContainer.innerHTML = `
         <div class="text-center py-16 text-slate-500">
           <i class="fa-solid fa-basket-shopping text-4xl mb-3"></i>
@@ -429,6 +440,9 @@ const FlunaApp = {
       `;
       return;
     }
+
+    const btnCheckout = document.getElementById('btnCheckout');
+    if (btnCheckout) btnCheckout.classList.remove('hidden');
 
     cartItemsContainer.innerHTML = this.state.cart.map((item, idx) => `
       <div class="glass-card p-4 flex items-center justify-between gap-3">
@@ -569,11 +583,35 @@ const FlunaApp = {
   },
 
   async loadCustomerOrders() {
+    if (!this.state.customer.id) {
+      if (this.state.activeOrder) {
+        this.state.customerOrders = [this.state.activeOrder];
+        this.renderTrackerView();
+        return;
+      }
+      return this.renderTrackerLoginPrompt();
+    }
+
     const { data } = await FlunaDB.getCustomerOrders(this.state.customer.id);
     if (data) {
       this.state.customerOrders = data;
       this.renderTrackerView();
     }
+  },
+
+  renderTrackerLoginPrompt() {
+    const trackerContent = document.getElementById('trackerContent');
+    if (!trackerContent) return;
+    trackerContent.innerHTML = `
+      <div class="flex flex-col items-center justify-center py-12 text-center space-y-4">
+        <i class="fa-solid fa-user-lock text-4xl text-slate-600"></i>
+        <h4 class="text-sm font-bold text-white">Iniciá sesión para seguir tu pedido</h4>
+        <p class="text-xs text-slate-400 max-w-sm mx-auto">Para poder rastrear el estado de tus órdenes en tiempo real, necesitamos saber quién sos.</p>
+        <button onclick="document.getElementById('closeTrackerModal').click(); document.getElementById('authBtn').click();" class="btn-fluna px-6 py-2 text-xs font-bold mt-2">
+          Iniciar Sesión / Registrarse
+        </button>
+      </div>
+    `;
   },
 
   openOrderTrackerModal(orderId = null) {
@@ -901,7 +939,9 @@ const FlunaApp = {
       name: meta.full_name || '',
       phone: meta.phone || '',
       address: meta.address || '',
-      email: user.email
+      email: user.email,
+      birthdate: meta.birthdate || '',
+      football_team: meta.football_team || ''
     };
 
     this.updateAuthUI(true);
@@ -950,22 +990,28 @@ const FlunaApp = {
     const submitBtn = document.getElementById('authSubmitBtn');
     const toggleBtnText = document.getElementById('authToggleText');
     const toggleBtn = document.getElementById('authToggleBtn');
-    const nameField = document.getElementById('authRegisterNameField');
+    const extraFields = document.getElementById('authRegisterExtraFields');
 
     if (mode === 'login') {
       if (title) title.innerText = 'Iniciar Sesión';
       if (submitBtn) submitBtn.innerText = 'Ingresar';
       if (toggleBtnText) toggleBtnText.innerText = '¿No tenés cuenta?';
       if (toggleBtn) toggleBtn.innerText = 'Registrate aquí';
-      nameField?.classList.add('hidden');
-      document.getElementById('authName').required = false;
+      extraFields?.classList.add('hidden');
+      if (document.getElementById('authName')) document.getElementById('authName').required = false;
+      if (document.getElementById('authPhone')) document.getElementById('authPhone').required = false;
+      if (document.getElementById('authBirthdate')) document.getElementById('authBirthdate').required = false;
+      if (document.getElementById('authTeam')) document.getElementById('authTeam').required = false;
     } else {
       if (title) title.innerText = 'Crear Cuenta';
       if (submitBtn) submitBtn.innerText = 'Registrarse';
       if (toggleBtnText) toggleBtnText.innerText = '¿Ya tenés cuenta?';
       if (toggleBtn) toggleBtn.innerText = 'Iniciá sesión';
-      nameField?.classList.remove('hidden');
-      document.getElementById('authName').required = true;
+      extraFields?.classList.remove('hidden');
+      if (document.getElementById('authName')) document.getElementById('authName').required = true;
+      if (document.getElementById('authPhone')) document.getElementById('authPhone').required = true;
+      if (document.getElementById('authBirthdate')) document.getElementById('authBirthdate').required = true;
+      if (document.getElementById('authTeam')) document.getElementById('authTeam').required = true;
     }
   },
 
@@ -973,7 +1019,10 @@ const FlunaApp = {
     e.preventDefault();
     const email = document.getElementById('authEmail').value.trim();
     const password = document.getElementById('authPassword').value;
-    const name = document.getElementById('authName').value.trim();
+    const name = document.getElementById('authName')?.value.trim();
+    const phone = document.getElementById('authPhone')?.value.trim();
+    const birthdate = document.getElementById('authBirthdate')?.value.trim();
+    const team = document.getElementById('authTeam')?.value.trim();
 
     if (this.state.authMode === 'login') {
       const { error } = await FlunaDB.signIn(email, password);
@@ -983,7 +1032,7 @@ const FlunaApp = {
         document.getElementById('authModal').classList.add('hidden');
       }
     } else {
-      const { error } = await FlunaDB.signUp(email, password, name);
+      const { error } = await FlunaDB.signUp(email, password, name, phone, birthdate, team);
       if (error) {
         alert('Error al registrarse: ' + error.message);
       } else {
