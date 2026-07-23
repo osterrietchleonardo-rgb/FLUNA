@@ -24,19 +24,15 @@ const FlunaApp = {
     activeOrder: null,
     customerOrders: [],
     messages: [],
-    authMode: 'login' // 'login' | 'register'
+    authMode: 'login', // 'login' | 'register'
+    isSubmittingOrder: false,
+    realtimeListo: false
   },
 
   init() {
     // Cargar carrito persistido de la sesión anterior
-    const savedCart = localStorage.getItem('fluna_cart');
-    if (savedCart) {
-      try {
-        this.state.cart = JSON.parse(savedCart);
-      } catch (e) {
-        this.state.cart = [];
-      }
-    }
+    const savedCart = FlunaUtils.readJSON('fluna_cart', []);
+    this.state.cart = Array.isArray(savedCart) ? savedCart.filter(i => i && i.name && i.price >= 0) : [];
 
     // Inicializar pasarela de pagos
     if (window.FlunaPayments) FlunaPayments.init();
@@ -50,11 +46,46 @@ const FlunaApp = {
     // Inicializar autenticación y sesión
     this.initAuth();
 
-    // Iniciar suscripciones en tiempo real
-    this.initRealtimeSubscriptions();
+    // Realtime de productos: el menú es de lectura pública, no necesita sesión.
+    // Los de pedidos y chat se activan al iniciar sesión (ver aplicarSesion),
+    // porque con RLS un canal anónimo no recibe esas filas.
+    FlunaDB.subscribeProducts(() => this.loadProducts());
 
     // Inicializar PWA service worker y prompt
     this.initPWA();
+
+    // Procesar la vuelta desde el Checkout de Mercado Pago
+    this.handlePaymentReturn();
+  },
+
+  /**
+   * Al volver del Checkout Pro, Mercado Pago nos manda a index.html con
+   * ?pago=aprobado|pendiente|rechazado&pedido=FL-XXXXXX
+   *
+   * Esto es solo informativo para el cliente: el estado real del pedido lo
+   * define el webhook, que puede tardar unos segundos más en llegar.
+   */
+  handlePaymentReturn() {
+    const params = new URLSearchParams(window.location.search);
+    const pago = params.get('pago');
+    const pedido = params.get('pedido');
+    if (!pago) return;
+
+    // Limpiamos la URL para que un refresh no repita el mensaje.
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    const mensajes = {
+      aprobado: `¡Listo! Tu pago del pedido #${pedido} fue aprobado. Ya entró a la cocina de FLuna 🍕`,
+      pendiente: `Tu pago del pedido #${pedido} quedó pendiente de acreditación. Te avisamos apenas se confirme.`,
+      rechazado: `El pago del pedido #${pedido} fue rechazado. Podés reintentarlo desde "Mis pedidos".`
+    };
+
+    alert(mensajes[pago] || `Estado del pago: ${pago}`);
+
+    if (pedido) {
+      // Damos un margen para que el webhook haya impactado el estado.
+      setTimeout(() => this.openOrderTrackerModal(pedido), 1200);
+    }
   },
 
   bindEvents() {
@@ -278,15 +309,15 @@ const FlunaApp = {
     catalogContainer.innerHTML = filtered.map(product => `
       <div class="glass-card overflow-hidden flex flex-col justify-between group">
         <div class="relative overflow-hidden h-48 bg-slate-900">
-          <img src="${product.image_url || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600'}" 
-               alt="${product.name}" 
+          <img src="${FlunaUtils.safeImageUrl(product.image_url)}"
+               alt="${esc(product.name)}" loading="lazy"
                class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
           <div class="absolute top-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1 rounded-full text-xs font-mono font-bold border ${
             product.category === 'Combos' ? 'text-amber-400 border-amber-500/50 bg-amber-950/80 shadow-[0_0_15px_rgba(245,158,11,0.3)]' :
             product.category === 'Ofertas' ? 'text-rose-400 border-rose-500/50 bg-rose-950/80 shadow-[0_0_15px_rgba(244,63,94,0.3)] animate-pulse' :
             'text-orange-400 border-orange-500/30'
           }">
-            ${product.category === 'Combos' ? '⚡ COMBO PROMO' : product.category === 'Ofertas' ? '🔥 OFERTA' : product.category}
+            ${product.category === 'Combos' ? '⚡ COMBO PROMO' : product.category === 'Ofertas' ? '🔥 OFERTA' : esc(product.category)}
           </div>
           ${product.available_stock <= 5 ? `
             <div class="absolute top-3 right-3 bg-rose-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
@@ -297,17 +328,17 @@ const FlunaApp = {
 
         <div class="p-5 flex-1 flex flex-col justify-between space-y-4">
           <div>
-            <h3 class="text-lg font-bold text-white group-hover:text-orange-400 transition">${product.name}</h3>
-            <p class="text-xs text-slate-400 line-clamp-2 mt-1">${product.description || ''}</p>
+            <h3 class="text-lg font-bold text-white group-hover:text-orange-400 transition">${esc(product.name)}</h3>
+            <p class="text-xs text-slate-400 line-clamp-2 mt-1">${esc(product.description || '')}</p>
           </div>
 
           <div class="flex items-center justify-between pt-2 border-t border-white/5">
             <div>
               <span class="text-xs text-slate-500 font-mono block">Precio</span>
-              <span class="text-xl font-extrabold font-mono text-white">$${Number(product.price).toLocaleString('es-AR')}</span>
+              <span class="text-xl font-extrabold font-mono text-white">${FlunaUtils.formatARS(product.price)}</span>
             </div>
 
-            <button onclick="FlunaApp.openProductModal('${product.id}')" 
+            <button onclick="FlunaApp.openProductModal('${esc(product.id)}')"
                     class="btn-fluna py-2 px-4 text-xs font-bold flex items-center gap-2">
               <i class="fa-solid fa-plus"></i> Armar a mi gusto 🍕
             </button>
@@ -327,7 +358,7 @@ const FlunaApp = {
     document.getElementById('modalProdTitle').innerText = product.name;
     document.getElementById('modalProdDesc').innerText = product.description || '';
     document.getElementById('modalProdPrice').innerText = '$' + Number(product.price).toLocaleString('es-AR');
-    document.getElementById('modalProdImg').src = product.image_url || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600';
+    document.getElementById('modalProdImg').src = FlunaUtils.safeImageUrl(product.image_url);
 
     modal.classList.remove('hidden');
     modal.classList.add('flex');
@@ -369,7 +400,7 @@ const FlunaApp = {
 
   updateCartUI() {
     // Guardar en almacenamiento local
-    localStorage.setItem('fluna_cart', JSON.stringify(this.state.cart));
+    FlunaUtils.writeJSON('fluna_cart', this.state.cart);
 
     const cartBadge = document.getElementById('cartBadge');
     const cartItemsContainer = document.getElementById('cartItems');
@@ -402,10 +433,10 @@ const FlunaApp = {
     cartItemsContainer.innerHTML = this.state.cart.map((item, idx) => `
       <div class="glass-card p-4 flex items-center justify-between gap-3">
         <div class="flex-1">
-          <h4 class="text-sm font-bold text-white">${item.name}</h4>
+          <h4 class="text-sm font-bold text-white">${esc(item.name)}</h4>
           ${item.options?.extra_cheese ? '<span class="text-[10px] text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded font-mono">+ Queso Extra</span>' : ''}
           <div class="text-xs text-orange-400 font-mono font-semibold mt-1">
-            $${Number(item.price).toLocaleString('es-AR')}
+            ${FlunaUtils.formatARS(item.price)}
           </div>
         </div>
 
@@ -445,6 +476,9 @@ const FlunaApp = {
   async handleOrderSubmit(e) {
     e.preventDefault();
 
+    // Candado anti doble-envío: sin esto, un doble clic crea dos pedidos.
+    if (this.state.isSubmittingOrder) return;
+
     const name = document.getElementById('custName').value.trim();
     const phone = document.getElementById('custPhone').value.trim();
     const address = document.getElementById('custAddress').value.trim();
@@ -457,6 +491,11 @@ const FlunaApp = {
       return;
     }
 
+    if (this.state.cart.length === 0) {
+      alert('Tu carrito está vacío. Agregá algo rico antes de confirmar el pedido.');
+      return;
+    }
+
     // Persistir datos del cliente
     this.state.customer.name = name;
     this.state.customer.phone = phone;
@@ -466,11 +505,10 @@ const FlunaApp = {
     localStorage.setItem('fluna_customer_phone', phone);
     localStorage.setItem('fluna_customer_address', address);
 
-    const totalAmount = this.state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const newOrderId = 'FL-' + Math.floor(1000 + Math.random() * 9000);
+    const totalAmount = this.state.cart.reduce((sum, item) => sum + (FlunaUtils.toNumber(item.price) * FlunaUtils.toNumber(item.quantity)), 0);
 
     const orderData = {
-      id: newOrderId,
+      id: FlunaUtils.generateOrderId(),
       customer_id: this.state.customer.id,
       customer_name: name,
       customer_phone: phone,
@@ -484,11 +522,33 @@ const FlunaApp = {
     };
 
     // Crear orden en Supabase
-    const { data: createdOrder, error } = await FlunaDB.createOrder(orderData, this.state.cart);
+    const submitBtn = document.querySelector('#checkoutForm button[type="submit"]');
+    const originalBtnHtml = submitBtn ? submitBtn.innerHTML : null;
+    this.state.isSubmittingOrder = true;
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando tu pedido...';
+    }
 
-    if (error) {
-      alert('Ocurrió un error al registrar el pedido: ' + error.message);
+    let createdOrder, error, itemsError;
+    try {
+      ({ data: createdOrder, error, itemsError } = await FlunaDB.createOrder(orderData, this.state.cart));
+    } finally {
+      this.state.isSubmittingOrder = false;
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalBtnHtml;
+      }
+    }
+
+    if (error || !createdOrder) {
+      alert('Ocurrió un error al registrar el pedido: ' + FlunaUtils.errorMessage(error));
       return;
+    }
+
+    // El pedido entró pero sus items no: avisamos en lugar de darlo por bueno.
+    if (itemsError) {
+      alert(`Tu pedido #${createdOrder.id} se registró, pero hubo un problema al guardar el detalle. Por favor avisanos por el chat para confirmarlo.`);
     }
 
     this.state.activeOrder = createdOrder;
@@ -496,15 +556,14 @@ const FlunaApp = {
     this.updateCartUI();
 
     document.getElementById('checkoutModal').classList.add('hidden');
+    document.getElementById('checkoutModal').classList.remove('flex');
 
-    // Iniciar pasarela Mercado Pago si aplica
+    // Mercado Pago redirige al Checkout Pro: no hay callback de éxito acá,
+    // el estado real del pago lo confirma el webhook.
     if (paymentMethod === 'mercadopago') {
-      FlunaPayments.processPayment(createdOrder, (res) => {
-        alert('¡Pago procesado con éxito en Mercado Pago! Tu pedido ha ingresado a la cocina de FLuna.');
-        this.openOrderTrackerModal(createdOrder.id);
-      });
+      FlunaPayments.processPayment(createdOrder);
     } else {
-      alert(`¡Pedido #${newOrderId} recibido con éxito! Pago en ${paymentMethod === 'cash' ? 'Efectivo al recibir' : 'Transferencia'}.`);
+      alert(`¡Pedido #${createdOrder.id} recibido con éxito! Pago en ${paymentMethod === 'cash' ? 'Efectivo al recibir' : 'Transferencia'}.`);
       this.openOrderTrackerModal(createdOrder.id);
     }
   },
@@ -549,10 +608,10 @@ const FlunaApp = {
         <div class="flex items-center justify-between border-b border-white/10 pb-4">
           <div>
             <span class="text-xs text-orange-400 font-mono font-bold">PEDIDO EN TIEMPO REAL</span>
-            <h3 class="text-2xl font-black text-white font-mono">#${latestOrder.id}</h3>
+            <h3 class="text-2xl font-black text-white font-mono">#${esc(latestOrder.id)}</h3>
           </div>
           <span class="badge-status badge-${this.getStatusBadgeClass(latestOrder.status)}">
-            ${latestOrder.status}
+            ${esc(latestOrder.status)}
           </span>
         </div>
 
@@ -586,12 +645,12 @@ const FlunaApp = {
         <!-- Detalle de la Orden -->
         <div class="bg-slate-950/80 p-4 rounded-xl space-y-3 text-xs border border-white/5">
           <div class="flex justify-between text-slate-400">
-            <span>Cliente: <strong class="text-white">${latestOrder.customer_name}</strong></span>
-            <span>Dirección: <strong class="text-white">${latestOrder.delivery_address}</strong></span>
+            <span>Cliente: <strong class="text-white">${esc(latestOrder.customer_name)}</strong></span>
+            <span>Dirección: <strong class="text-white">${esc(latestOrder.delivery_address)}</strong></span>
           </div>
           <div class="flex justify-between text-slate-400">
-            <span>Método de Pago: <strong class="text-orange-400 uppercase">${latestOrder.payment_method} (${latestOrder.payment_status})</strong></span>
-            <span>Total: <strong class="text-white font-mono text-sm">$${Number(latestOrder.total_amount).toLocaleString('es-AR')}</strong></span>
+            <span>Método de Pago: <strong class="text-orange-400 uppercase">${esc(latestOrder.payment_method)} (${esc(latestOrder.payment_status)})</strong></span>
+            <span>Total: <strong class="text-white font-mono text-sm">${FlunaUtils.formatARS(latestOrder.total_amount)}</strong></span>
           </div>
         </div>
       </div>
@@ -614,11 +673,53 @@ const FlunaApp = {
   },
 
   // --- CHAT EN TIEMPO REAL ---
+  /**
+   * ID de conversación del chat: siempre el usuario logueado.
+   *
+   * Con RLS estricto la base solo devuelve los mensajes cuyo customer_id
+   * coincide con auth.uid(), así que un visitante anónimo no podría leer ni
+   * su propia conversación. Por eso el chat requiere sesión.
+   */
+  getChatCustomerId() {
+    return this.state.customer.id || '';
+  },
+
+  /** Panel del chat cuando el visitante todavía no inició sesión. */
+  renderChatLoginPrompt() {
+    const chatContainer = document.getElementById('chatMessages');
+    if (!chatContainer) return;
+
+    chatContainer.innerHTML = `
+      <div class="text-center text-xs text-slate-400 py-10 px-4 space-y-3">
+        <i class="fa-solid fa-comments text-3xl text-slate-600 block"></i>
+        <p class="font-semibold text-slate-300">Ingresá para chatear con nosotros</p>
+        <p class="text-[11px] text-slate-500">Así tu conversación queda privada y vinculada a tus pedidos.</p>
+        <button onclick="FlunaApp.abrirLoginDesdeChat()" class="btn-fluna py-2 px-5 text-xs font-bold">
+          Iniciar sesión
+        </button>
+      </div>
+    `;
+
+    document.getElementById('chatSendForm')?.classList.add('hidden');
+  },
+
+  abrirLoginDesdeChat() {
+    document.getElementById('chatWidget')?.classList.add('hidden');
+    this.toggleAuthMode('login');
+    const modal = document.getElementById('authModal');
+    modal?.classList.remove('hidden');
+    modal?.classList.add('flex');
+  },
+
   async loadChatMessages() {
     const chatContainer = document.getElementById('chatMessages');
     if (!chatContainer) return;
 
-    const { data } = await FlunaDB.getMessages(this.state.customer.id);
+    if (!this.getChatCustomerId()) return this.renderChatLoginPrompt();
+
+    document.getElementById('chatSendForm')?.classList.remove('hidden');
+
+    const { data } = await FlunaDB.getMessages(this.getChatCustomerId());
     if (data) {
       this.state.messages = data;
       this.renderChatMessages();
@@ -646,8 +747,8 @@ const FlunaApp = {
             isCustomer ? 'bg-orange-600 text-white rounded-br-none' : 'bg-slate-800 text-slate-200 border border-white/10 rounded-bl-none'
           }">
             <div class="font-bold text-[10px] text-orange-200 mb-0.5">${msg.sender_role === 'admin' ? 'Pizzería FLuna' : 'Tú'}</div>
-            <p>${msg.message}</p>
-            <span class="text-[9px] opacity-70 block text-right mt-1 font-mono">${new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+            <p class="whitespace-pre-wrap break-words">${esc(msg.message)}</p>
+            <span class="text-[9px] opacity-70 block text-right mt-1 font-mono">${FlunaUtils.formatTime(msg.created_at)}</span>
           </div>
         </div>
       `;
@@ -658,6 +759,8 @@ const FlunaApp = {
 
   async handleSendChatMessage(e) {
     e.preventDefault();
+    if (!this.getChatCustomerId()) return this.renderChatLoginPrompt();
+
     const input = document.getElementById('chatInput');
     const text = input.value.trim();
     if (!text) return;
@@ -665,37 +768,41 @@ const FlunaApp = {
     input.value = '';
 
     const msgObj = {
-      customer_id: this.state.customer.id,
+      customer_id: this.getChatCustomerId(),
       customer_name: this.state.customer.name || 'Cliente FLuna',
       sender_role: 'customer',
-      message: text
+      message: text.slice(0, 2000)
     };
 
-    await FlunaDB.sendMessage(msgObj);
+    const { error } = await FlunaDB.sendMessage(msgObj);
+    if (error) {
+      alert('No pudimos enviar tu mensaje: ' + FlunaUtils.errorMessage(error));
+      input.value = text;
+      return;
+    }
+
     this.loadChatMessages();
   },
 
-  // --- SUSCRIPCIONES REALTIME ---
+  // --- SUSCRIPCIONES REALTIME (solo con sesión iniciada) ---
   initRealtimeSubscriptions() {
-    // Escuchar cambios de estado en pedidos
+    if (this.state.realtimeListo) return;
+    this.state.realtimeListo = true;
+
+    // Escuchar cambios de estado en los pedidos propios
     FlunaDB.subscribeOrders((payload) => {
+      if (!this.state.customer.id) return;
       if (payload.new && payload.new.customer_id === this.state.customer.id) {
-        console.log('Actualización Realtime de pedido:', payload.new);
         this.loadCustomerOrders();
       }
     });
 
     // Escuchar mensajes de chat
     FlunaDB.subscribeMessages((newMsg) => {
-      if (newMsg.customer_id === this.state.customer.id) {
+      if (newMsg.customer_id === this.getChatCustomerId()) {
         this.state.messages.push(newMsg);
         this.renderChatMessages();
       }
-    });
-
-    // Escuchar cambios en la base de productos
-    FlunaDB.subscribeProducts(() => {
-      this.loadProducts();
     });
   },
 
@@ -735,63 +842,69 @@ const FlunaApp = {
     const client = getSupabaseClient();
     if (!client) return;
 
-    // Escuchar cambios de sesión
-    client.auth.onAuthStateChange(async (event, session) => {
-      if (session) {
-        const user = session.user;
-        this.state.customer = {
-          id: user.id,
-          name: user.user_metadata.full_name || '',
-          phone: user.user_metadata.phone || '',
-          address: user.user_metadata.address || '',
-          email: user.email
-        };
-        this.updateAuthUI(true);
-        this.loadCustomerOrders();
-        this.loadChatMessages();
+    // Un solo camino para aplicar la sesión, venga del arranque o de un login.
+    client.auth.onAuthStateChange((event, session) => this.aplicarSesion(session));
 
-        // Ocultar aviso de autenticación si existe
-        document.getElementById('authNotice')?.classList.add('hidden');
-
-        // --- RESTAURACIÓN DE COMPRA PENDIENTE ---
-        if (localStorage.getItem('fluna_pending_checkout') === 'true') {
-          const pendingCart = localStorage.getItem('fluna_pending_cart');
-          if (pendingCart) {
-            this.state.cart = JSON.parse(pendingCart);
-            this.updateCartUI();
-          }
-          localStorage.removeItem('fluna_pending_checkout');
-          localStorage.removeItem('fluna_pending_cart');
-
-          setTimeout(() => {
-            const checkoutModal = document.getElementById('checkoutModal');
-            if (checkoutModal) {
-              checkoutModal.classList.remove('hidden');
-              checkoutModal.classList.add('flex');
-              this.fillCheckoutFormFields();
-            }
-          }, 400);
-        }
-      } else {
-        this.state.customer = { id: '', name: '', phone: '', address: '', email: '' };
-        this.updateAuthUI(false);
-      }
-    });
-
-    // Cargar sesión inicial
     const { data: { session } } = await client.auth.getSession();
-    if (session) {
-      const user = session.user;
-      this.state.customer = {
-        id: user.id,
-        name: user.user_metadata.full_name || '',
-        phone: user.user_metadata.phone || '',
-        address: user.user_metadata.address || '',
-        email: user.email
-      };
-      this.updateAuthUI(true);
-      this.loadCustomerOrders();
-      this.loadChatMessages();
+    this.aplicarSesion(session, { esArranque: true });
+  },
+
+  /**
+   * Aplica (o limpia) la sesión del cliente.
+   * Con RLS activo, los pedidos y el chat solo son legibles con sesión, así que
+   * acá también se le pasa el token a realtime y se abren esos canales.
+   */
+  aplicarSesion(session, { esArranque = false } = {}) {
+    if (!session) {
+      this.state.customer = { id: '', name: '', phone: '', address: '', email: '' };
+      this.state.customerOrders = [];
+      this.state.messages = [];
+      this.updateAuthUI(false);
+      FlunaDB.setRealtimeAuth(null);
+      return;
+    }
+
+    const user = session.user;
+    const meta = user.user_metadata || {};
+
+    this.state.customer = {
+      id: user.id,
+      name: meta.full_name || '',
+      phone: meta.phone || '',
+      address: meta.address || '',
+      email: user.email
+    };
+
+    this.updateAuthUI(true);
+
+    FlunaDB.setRealtimeAuth(session.access_token);
+    this.initRealtimeSubscriptions();
+
+    this.loadCustomerOrders();
+    this.loadChatMessages();
+
+    document.getElementById('authNotice')?.classList.add('hidden');
+
+    if (esArranque) return;
+
+    // --- RESTAURACIÓN DE COMPRA PENDIENTE ---
+    if (localStorage.getItem('fluna_pending_checkout') === 'true') {
+      const pendingCart = FlunaUtils.readJSON('fluna_pending_cart', null);
+      if (Array.isArray(pendingCart) && pendingCart.length > 0) {
+        this.state.cart = pendingCart;
+        this.updateCartUI();
+      }
+      localStorage.removeItem('fluna_pending_checkout');
+      localStorage.removeItem('fluna_pending_cart');
+
+      setTimeout(() => {
+        const checkoutModal = document.getElementById('checkoutModal');
+        if (checkoutModal) {
+          checkoutModal.classList.remove('hidden');
+          checkoutModal.classList.add('flex');
+          this.fillCheckoutFormFields();
+        }
+      }, 400);
     }
   },
 
@@ -920,15 +1033,15 @@ const FlunaApp = {
     listContainer.innerHTML = this.state.customerOrders.map(order => `
       <div class="glass-card p-4 space-y-2 border border-white/5">
         <div class="flex justify-between items-center">
-          <span class="font-bold text-orange-400 font-mono text-xs">#${order.id}</span>
-          <span class="text-[10px] text-slate-400">${new Date(order.created_at).toLocaleDateString('es-AR')}</span>
+          <span class="font-bold text-orange-400 font-mono text-xs">#${esc(order.id)}</span>
+          <span class="text-[10px] text-slate-400">${FlunaUtils.formatDate(order.created_at)}</span>
         </div>
         <div class="text-xs text-slate-300">
-          ${order.order_items.map(i => `${i.quantity}x ${i.product_name}`).join(', ')}
+          ${(order.order_items || []).map(i => `${esc(i.quantity)}x ${esc(i.product_name)}`).join(', ') || 'Sin detalle de items'}
         </div>
         <div class="flex justify-between items-center text-xs pt-1 border-t border-white/5 font-mono">
-          <span class="text-slate-400">Total: $${Number(order.total_amount).toLocaleString('es-AR')}</span>
-          <span class="badge-status badge-${this.getStatusBadgeClass(order.status)} text-[9px] px-2 py-0.5">${order.status}</span>
+          <span class="text-slate-400">Total: ${FlunaUtils.formatARS(order.total_amount)}</span>
+          <span class="badge-status badge-${this.getStatusBadgeClass(order.status)} text-[9px] px-2 py-0.5">${esc(order.status)}</span>
         </div>
       </div>
     `).join('');
