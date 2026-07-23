@@ -149,7 +149,8 @@
 
   <!-- External SDKs -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://sdk.mercadopago.com/js/v2"></script>
+  <!-- Checkout Pro funciona por redirección: no requiere el SDK en el navegador.
+       El dominio queda permitido en la CSP por si más adelante se usan Bricks. -->
 </head>
 <body class="tech-bg text-slate-100 min-h-screen flex flex-col justify-between selection:bg-orange-500 selection:text-white">
 
@@ -611,6 +612,7 @@
   </div>
 
   <!-- App Main Scripts -->
+  <script src="./js/utils.js"></script>
   <script src="./js/supabase-config.js"></script>
   <script src="./js/payments.js"></script>
   <script src="./js/app.js"></script>

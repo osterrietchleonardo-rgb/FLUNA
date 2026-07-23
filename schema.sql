@@ -124,6 +124,8 @@ CREATE INDEX IF NOT EXISTS idx_messages_customer ON public.messages(customer_id,
 -- ------------------------------------------------------------
 -- TRIGGER: AUTO-REGISTRO DE INGRESO FINANCIERO AL APROBAR PEDIDO
 -- ------------------------------------------------------------
+-- Este trigger es la ÚNICA fuente del ingreso por venta en `finances`.
+-- No insertar el ingreso también desde el frontend: se contaría dos veces.
 CREATE OR REPLACE FUNCTION public.fn_sync_order_finance()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -149,7 +151,29 @@ CREATE TRIGGER trg_sync_order_finance
     EXECUTE FUNCTION public.fn_sync_order_finance();
 
 -- ------------------------------------------------------------
+-- 8. RECETAS DE PRODUCTOS (PRODUCT_RECIPES)
+-- Qué insumos y en qué cantidad consume cada producto del menú.
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.product_recipes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+    ingredient_id UUID NOT NULL REFERENCES public.ingredients(id) ON DELETE CASCADE,
+    amount NUMERIC(10, 3) NOT NULL CHECK (amount > 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (product_id, ingredient_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_recipes_product ON public.product_recipes(product_id);
+
+-- ------------------------------------------------------------
 -- ROW LEVEL SECURITY (RLS) POLICIES
+--
+-- ATENCIÓN: estas políticas son completamente abiertas (USING true).
+-- Cualquiera con la publishable key puede leer y escribir todas las tablas,
+-- incluidas finanzas y pedidos de otros clientes. Es lo que la app necesita
+-- hoy porque el panel de admin opera desde el navegador con la misma clave
+-- anónima que el sitio público.
+-- Para cerrarlo de verdad, ver `schema_hardening.sql`.
 -- ------------------------------------------------------------
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
@@ -158,6 +182,20 @@ ALTER TABLE public.ingredients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.purchases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.finances ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.product_recipes ENABLE ROW LEVEL SECURITY;
+
+-- Se recrean para que este archivo sea re-ejecutable sin errores.
+DROP POLICY IF EXISTS "Public Products Read" ON public.products;
+DROP POLICY IF EXISTS "Public Products Insert" ON public.products;
+DROP POLICY IF EXISTS "Public Products Update" ON public.products;
+DROP POLICY IF EXISTS "Public Products Delete" ON public.products;
+DROP POLICY IF EXISTS "Public Orders All" ON public.orders;
+DROP POLICY IF EXISTS "Public Order Items All" ON public.order_items;
+DROP POLICY IF EXISTS "Public Ingredients All" ON public.ingredients;
+DROP POLICY IF EXISTS "Public Purchases All" ON public.purchases;
+DROP POLICY IF EXISTS "Public Finances All" ON public.finances;
+DROP POLICY IF EXISTS "Public Messages All" ON public.messages;
+DROP POLICY IF EXISTS "Public Product Recipes All" ON public.product_recipes;
 
 -- Políticas de lectura pública para Productos
 CREATE POLICY "Public Products Read" ON public.products FOR SELECT USING (true);
@@ -169,17 +207,27 @@ CREATE POLICY "Public Products Delete" ON public.products FOR DELETE USING (true
 CREATE POLICY "Public Orders All" ON public.orders FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public Order Items All" ON public.order_items FOR ALL USING (true) WITH CHECK (true);
 
--- Políticas para Ingredientes, Compras y Finanzas
+-- Políticas para Ingredientes, Compras, Finanzas y Recetas
 CREATE POLICY "Public Ingredients All" ON public.ingredients FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public Purchases All" ON public.purchases FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public Finances All" ON public.finances FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Public Messages All" ON public.messages FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Product Recipes All" ON public.product_recipes FOR ALL USING (true) WITH CHECK (true);
 
 -- ------------------------------------------------------------
 -- HABILITAR REALTIME EN TABLAS CLAVE
 -- ------------------------------------------------------------
-ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ------------------------------------------------------------
 -- DATOS SEMILLA (SEED DATA)

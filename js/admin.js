@@ -19,46 +19,174 @@ const FlunaAdmin = {
     activeChatCustomer: null,
     chatFilter: 'all',
     chatSearchQuery: '',
-    archivedCustomers: JSON.parse(localStorage.getItem('fluna_archived_chats') || '[]'),
+    archivedCustomers: FlunaUtils.readJSON('fluna_archived_chats', []),
     chatTimer: null,
-    marketingHistory: JSON.parse(localStorage.getItem('fluna_mk_history') || '[]'),
-    manualOrderItems: {}
+    marketingHistory: FlunaUtils.readJSON('fluna_mk_history', []),
+    manualOrderItems: {},
+    isSavingManualOrder: false,
+    adminUser: null,
+    realtimeListo: false
   },
 
   init() {
     this.bindEvents();
+    // Realtime se suscribe recién después del login: con RLS activo, un canal
+    // abierto como anónimo no recibe ningún cambio de pedidos.
     this.checkAdminAuth();
-    this.initRealtimeSubscriptions();
+    this.procesarRetornoOAuth();
   },
 
-  checkAdminAuth() {
-    const isAuth = sessionStorage.getItem('fluna_admin_logged');
-    const authModal = document.getElementById('adminAuthModal');
-    if (!isAuth && authModal) {
-      authModal.classList.remove('hidden');
-      authModal.classList.add('flex');
-    } else {
-      if (authModal) authModal.classList.add('hidden');
-      this.loadAllData();
+  /** Arranca el panel una vez que hay sesión de admin confirmada. */
+  async iniciarSesionAdmin(user) {
+    this.state.adminUser = user;
+
+    const client = getSupabaseClient();
+    const { data: { session } } = await client.auth.getSession();
+    FlunaDB.setRealtimeAuth(session?.access_token);
+
+    if (!this.state.realtimeListo) {
+      this.initRealtimeSubscriptions();
+      this.state.realtimeListo = true;
     }
+
+    this.loadAllData();
+  },
+
+  /**
+   * El acceso al panel es una sesión real de Supabase Auth con
+   * app_metadata.role = 'admin'. Ese JWT es el que hace cumplir las políticas
+   * RLS en la base, así que la misma identidad protege panel y datos.
+   */
+  async checkAdminAuth() {
+    const authModal = document.getElementById('adminAuthModal');
+    const client = getSupabaseClient();
+
+    const mostrarLogin = () => {
+      authModal?.classList.remove('hidden');
+      authModal?.classList.add('flex');
+    };
+    const ocultarLogin = () => {
+      authModal?.classList.add('hidden');
+      authModal?.classList.remove('flex');
+    };
+
+    if (!client) return mostrarLogin();
+
+    const { data: { session } } = await client.auth.getSession();
+
+    if (!session) return mostrarLogin();
+
+    if (session.user?.app_metadata?.role !== 'admin') {
+      // Sesión válida pero sin permisos: no dejamos entrar con un usuario cliente.
+      await FlunaDB.signOut();
+      mostrarLogin();
+      this.mostrarErrorLogin('Ese usuario no tiene permisos de administrador.');
+      return;
+    }
+
+    ocultarLogin();
+    this.iniciarSesionAdmin(session.user);
+  },
+
+  mostrarErrorLogin(mensaje) {
+    const errorEl = document.getElementById('adminAuthError');
+    if (errorEl) {
+      errorEl.innerText = mensaje;
+      errorEl.classList.remove('hidden');
+    } else {
+      alert(mensaje);
+    }
+  },
+
+  /** Login del panel con el usuario administrador de Supabase. */
+  async handleAdminLogin(e) {
+    e.preventDefault();
+
+    const emailInput = document.getElementById('adminEmailInput');
+    const pwdInput = document.getElementById('adminPwdInput');
+    const errorEl = document.getElementById('adminAuthError');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+
+    const email = emailInput ? emailInput.value.trim() : '';
+    const pwd = pwdInput ? pwdInput.value : '';
+
+    if (errorEl) errorEl.classList.add('hidden');
+    if (!email || !pwd) return this.mostrarErrorLogin('Completá tu email y contraseña.');
+
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const { data, error } = await FlunaDB.signIn(email, pwd);
+
+      if (error) {
+        return this.mostrarErrorLogin(
+          /invalid login/i.test(error.message || '')
+            ? 'Email o contraseña incorrectos.'
+            : FlunaUtils.errorMessage(error)
+        );
+      }
+
+      if (data?.user?.app_metadata?.role !== 'admin') {
+        await FlunaDB.signOut();
+        return this.mostrarErrorLogin(
+          'Ese usuario no tiene permisos de administrador. Revisá que tenga role="admin" en app_metadata.'
+        );
+      }
+
+      if (pwdInput) pwdInput.value = '';
+
+      const modal = document.getElementById('adminAuthModal');
+      modal?.classList.add('hidden');
+      modal?.classList.remove('flex');
+
+      this.iniciarSesionAdmin(data.user);
+    } catch (err) {
+      this.mostrarErrorLogin('No se pudo iniciar sesión: ' + FlunaUtils.errorMessage(err));
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
+  },
+
+  async logoutAdmin() {
+    await FlunaDB.signOut();
+    location.reload();
+  },
+
+  /**
+   * Llamada a un endpoint privado del panel.
+   * Manda el access_token de Supabase, que el servidor valida contra
+   * /auth/v1/user y comprueba que tenga role=admin.
+   */
+  async adminFetch(url, options = {}) {
+    const client = getSupabaseClient();
+    const { data: { session } } = await client.auth.getSession();
+    const token = session?.access_token || '';
+
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(options.headers || {})
+      }
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (res.status === 401) {
+      FlunaUtils.toast('Sesión vencida', 'Volvé a iniciar sesión.', 'warning');
+      setTimeout(() => location.reload(), 1800);
+      throw new Error('Sesión vencida');
+    }
+
+    return { res, data };
   },
 
   bindEvents() {
     // Formulario Login Admin
     const adminLoginForm = document.getElementById('adminLoginForm');
     if (adminLoginForm) {
-      adminLoginForm.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const pwd = document.getElementById('adminPwdInput').value;
-        // Valida con la clave del .env o PIN maestro 'Fluna_May_2026'
-        if (pwd === 'Fluna_May_2026' || pwd === 'admin123') {
-          sessionStorage.setItem('fluna_admin_logged', 'true');
-          document.getElementById('adminAuthModal').classList.add('hidden');
-          this.loadAllData();
-        } else {
-          alert('Contraseña de administrador incorrecta.');
-        }
-      });
+      adminLoginForm.addEventListener('submit', (e) => this.handleAdminLogin(e));
     }
 
     // Navegación Sidebar Tabs
@@ -151,6 +279,7 @@ const FlunaAdmin = {
       this.populateMarketingProducts();
       this.renderMarketingHistory();
     }
+    if (tabId === 'integraciones') this.renderIntegrationsSection();
   },
 
   async loadAllData() {
@@ -167,6 +296,15 @@ const FlunaAdmin = {
     if (ingredientsRes.data) this.state.ingredients = ingredientsRes.data;
     if (financesRes.data) this.state.finances = financesRes.data;
     if (messagesRes.data) this.state.messages = messagesRes.data;
+
+    // Si la carga falla en silencio el panel muestra ceros como si fueran reales.
+    const results = [ordersRes, productsRes, ingredientsRes, financesRes, messagesRes];
+    const failed = results.filter(r => r && r.error);
+    if (failed.length === results.length) {
+      alert('No se pudo cargar la información desde Supabase. Revisá la conexión y recargá el panel.');
+    } else if (failed.length > 0) {
+      console.warn('[FLuna] Algunas consultas del panel fallaron:', failed.map(r => r.error));
+    }
 
     this.renderKPIs();
     this.switchTab(this.state.activeTab);
@@ -295,20 +433,20 @@ const FlunaAdmin = {
       const stageOrders = this.state.orders.filter(o => o.status === stage);
 
       colEl.innerHTML = stageOrders.map(order => `
-        <div onclick="FlunaAdmin.showOrderDetails('${order.id}')" class="glass-card p-4 space-y-3 cursor-pointer hover:border-orange-500/50 transition">
+        <div onclick="FlunaAdmin.showOrderDetails('${esc(order.id)}')" class="glass-card p-4 space-y-3 cursor-pointer hover:border-orange-500/50 transition">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-mono font-bold text-orange-400">#${order.id}</span>
-            <span class="text-[10px] text-slate-400 font-mono">${new Date(order.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+            <span class="text-xs font-mono font-bold text-orange-400">#${esc(order.id)}</span>
+            <span class="text-[10px] text-slate-400 font-mono">${FlunaUtils.formatTime(order.created_at)}</span>
           </div>
 
           <div>
-            <h5 class="text-sm font-bold text-white truncate">${order.customer_name}</h5>
-            <p class="text-xs text-slate-400 truncate"><i class="fa-solid fa-location-dot text-orange-500"></i> ${order.delivery_address}</p>
+            <h5 class="text-sm font-bold text-white truncate">${esc(order.customer_name)}</h5>
+            <p class="text-xs text-slate-400 truncate"><i class="fa-solid fa-location-dot text-orange-500"></i> ${esc(order.delivery_address)}</p>
           </div>
 
           <div class="bg-slate-900/90 p-2 rounded-lg text-[11px] font-mono text-slate-300 flex justify-between items-center">
-            <span>${order.payment_method.toUpperCase()}</span>
-            <span class="font-bold text-white">$${Number(order.total_amount).toLocaleString('es-AR')}</span>
+            <span>${esc((order.payment_method || '').toUpperCase())}</span>
+            <span class="font-bold text-white">${FlunaUtils.formatARS(order.total_amount)}</span>
           </div>
 
           <!-- Mover Estado Quick Action -->
@@ -324,32 +462,38 @@ const FlunaAdmin = {
     let html = '';
 
     if (currentStatus === 'Cancelado') {
-      html += `<button onclick="FlunaAdmin.deleteOrder('${orderId}')" class="text-[10px] bg-rose-600 hover:bg-rose-500 text-white font-bold px-2 py-1 rounded flex items-center gap-1"><i class="fa-solid fa-trash text-[9px]"></i> Eliminar</button>`;
-      html += `<button onclick="FlunaAdmin.moveOrderStatus('${orderId}', 'Solicitado')" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded ml-auto">Reabrir</button>`;
+      html += `<button onclick="FlunaAdmin.deleteOrder('${esc(orderId)}')" class="text-[10px] bg-rose-600 hover:bg-rose-500 text-white font-bold px-2 py-1 rounded flex items-center gap-1"><i class="fa-solid fa-trash text-[9px]"></i> Eliminar</button>`;
+      html += `<button onclick="FlunaAdmin.moveOrderStatus('${esc(orderId)}', 'Solicitado')" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded ml-auto">Reabrir</button>`;
       return html;
     }
 
     // Botón de Cancelar rápido
-    html += `<button onclick="FlunaAdmin.moveOrderStatus('${orderId}', 'Cancelado')" title="Cancelar Pedido" class="text-[10px] bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 px-2 py-1 rounded flex items-center justify-center"><i class="fa-solid fa-ban"></i></button>`;
+    html += `<button onclick="FlunaAdmin.moveOrderStatus('${esc(orderId)}', 'Cancelado')" title="Cancelar Pedido" class="text-[10px] bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 px-2 py-1 rounded flex items-center justify-center"><i class="fa-solid fa-ban"></i></button>`;
 
     const normalStages = stages.filter(s => s !== 'Cancelado');
     const normalIdx = normalStages.indexOf(currentStatus);
 
     if (normalIdx > 0) {
       const prevStage = normalStages[normalIdx - 1];
-      html += `<button onclick="FlunaAdmin.moveOrderStatus('${orderId}', '${prevStage}')" title="Volver a ${prevStage}" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded">←</button>`;
+      html += `<button onclick="FlunaAdmin.moveOrderStatus('${esc(orderId)}', '${prevStage}')" title="Volver a ${prevStage}" class="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2.5 py-1 rounded">←</button>`;
     }
 
     if (normalIdx < normalStages.length - 1) {
       const nextStage = normalStages[normalIdx + 1];
-      html += `<button onclick="FlunaAdmin.moveOrderStatus('${orderId}', '${nextStage}')" class="text-[10px] bg-orange-600 hover:bg-orange-500 text-white font-bold px-2 py-1 rounded ml-auto flex items-center gap-1">${nextStage} <i class="fa-solid fa-arrow-right text-[9px]"></i></button>`;
+      html += `<button onclick="FlunaAdmin.moveOrderStatus('${esc(orderId)}', '${nextStage}')" class="text-[10px] bg-orange-600 hover:bg-orange-500 text-white font-bold px-2 py-1 rounded ml-auto flex items-center gap-1">${nextStage} <i class="fa-solid fa-arrow-right text-[9px]"></i></button>`;
     }
 
     return html;
   },
 
   async moveOrderStatus(orderId, newStatus) {
-    await FlunaDB.updateOrderStatus(orderId, newStatus);
+    const { error } = await FlunaDB.updateOrderStatus(orderId, newStatus);
+    if (error) {
+      // Sin esto el tablero mostraba el pedido movido aunque la base lo hubiera rechazado.
+      alert('No se pudo actualizar el estado del pedido: ' + FlunaUtils.errorMessage(error));
+      return;
+    }
+
     const orderIndex = this.state.orders.findIndex(o => o.id === orderId);
     if (orderIndex !== -1) {
       this.state.orders[orderIndex].status = newStatus;
@@ -379,28 +523,28 @@ const FlunaAdmin = {
     tbody.innerHTML = filtered.map(prod => `
       <tr class="border-b border-white/5 hover:bg-slate-900/40 text-xs">
         <td class="p-3">
-          <img src="${prod.image_url || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600'}" class="w-10 h-10 object-cover rounded-lg">
+          <img src="${FlunaUtils.safeImageUrl(prod.image_url)}" alt="" loading="lazy" class="w-10 h-10 object-cover rounded-lg">
         </td>
-        <td class="p-3 font-bold text-white">${prod.name}</td>
+        <td class="p-3 font-bold text-white">${esc(prod.name)}</td>
         <td class="p-3">
           <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
             prod.category === 'Combos' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
             prod.category === 'Ofertas' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
             'text-slate-400'
           }">
-            ${prod.category === 'Combos' ? '⚡ Combos' : prod.category === 'Ofertas' ? '🔥 Ofertas' : prod.category}
+            ${prod.category === 'Combos' ? '⚡ Combos' : prod.category === 'Ofertas' ? '🔥 Ofertas' : esc(prod.category)}
           </span>
         </td>
-        <td class="p-3 font-mono font-bold text-orange-400">$${Number(prod.price).toLocaleString('es-AR')}</td>
-        <td class="p-3 font-mono text-white">${prod.available_stock} u</td>
+        <td class="p-3 font-mono font-bold text-orange-400">${FlunaUtils.formatARS(prod.price)}</td>
+        <td class="p-3 font-mono text-white">${esc(prod.available_stock)} u</td>
         <td class="p-3">
           <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${prod.is_active ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}">
             ${prod.is_active ? 'Activo' : 'Inactivo'}
           </span>
         </td>
         <td class="p-3 space-x-2">
-          <button onclick="FlunaAdmin.editProduct('${prod.id}')" class="text-sky-400 hover:text-sky-300"><i class="fa-solid fa-pen-to-square"></i></button>
-          <button onclick="FlunaAdmin.deleteProduct('${prod.id}')" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button>
+          <button onclick="FlunaAdmin.editProduct('${esc(prod.id)}')" class="text-sky-400 hover:text-sky-300"><i class="fa-solid fa-pen-to-square"></i></button>
+          <button onclick="FlunaAdmin.deleteProduct('${esc(prod.id)}')" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button>
         </td>
       </tr>
     `).join('');
@@ -424,24 +568,43 @@ const FlunaAdmin = {
       imageUrl = data.publicUrl;
     }
 
+    const price = parseFloat(document.getElementById('prodFormPrice').value);
+    const stock = parseInt(document.getElementById('prodFormStock').value, 10);
+
+    if (!Number.isFinite(price) || price < 0) {
+      alert('El precio debe ser un número válido mayor o igual a 0.');
+      return;
+    }
+    if (!Number.isInteger(stock) || stock < 0) {
+      alert('El stock debe ser un número entero mayor o igual a 0.');
+      return;
+    }
+
     const productData = {
       name: document.getElementById('prodFormName').value.trim(),
       category: document.getElementById('prodFormCategory').value,
-      price: parseFloat(document.getElementById('prodFormPrice').value),
-      available_stock: parseInt(document.getElementById('prodFormStock').value),
+      price: price,
+      available_stock: stock,
       image_url: imageUrl,
       description: document.getElementById('prodFormDesc').value.trim(),
       is_active: document.getElementById('prodFormActive').checked
     };
 
-    let product;
-    if (id) {
-      const res = await FlunaDB.updateProduct(id, productData);
-      product = res.data?.[0];
-    } else {
-      const res = await FlunaDB.createProduct(productData);
-      product = res.data?.[0];
+    if (!productData.name) {
+      alert('El producto necesita un nombre.');
+      return;
     }
+
+    let product;
+    const res = id
+      ? await FlunaDB.updateProduct(id, productData)
+      : await FlunaDB.createProduct(productData);
+
+    if (res.error) {
+      alert('No se pudo guardar el producto: ' + FlunaUtils.errorMessage(res.error));
+      return;
+    }
+    product = res.data?.[0];
 
     // Si el producto se guardó, guardar su receta
     if (product) {
@@ -466,7 +629,11 @@ const FlunaAdmin = {
 
   async deleteProduct(id) {
     if (confirm('¿Eliminar este producto del menú FLuna?')) {
-      await FlunaDB.deleteProduct(id);
+      const { error } = await FlunaDB.deleteProduct(id);
+      if (error) {
+        alert('No se pudo eliminar el producto: ' + FlunaUtils.errorMessage(error));
+        return;
+      }
       this.loadAllData();
     }
   },
@@ -506,15 +673,15 @@ const FlunaAdmin = {
 
     tbody.innerHTML = this.state.finances.map(f => `
       <tr class="border-b border-white/5 hover:bg-slate-900/40 text-xs font-mono">
-        <td class="p-3 text-slate-400">${f.date}</td>
-        <td class="p-3 font-bold uppercase text-white">${f.description}</td>
-        <td class="p-3 text-slate-300 capitalize">${f.category}</td>
+        <td class="p-3 text-slate-400">${esc(f.date)}</td>
+        <td class="p-3 font-bold uppercase text-white">${esc(f.description)}</td>
+        <td class="p-3 text-slate-300 capitalize">${esc(f.category)}</td>
         <td class="p-3 font-bold ${f.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}">
-          ${f.type === 'income' ? '+' : '-'}$${Number(f.amount).toLocaleString('es-AR')}
+          ${f.type === 'income' ? '+' : '-'}${FlunaUtils.formatARS(f.amount)}
         </td>
         <td class="p-3 space-x-2 font-sans">
-          <button onclick="FlunaAdmin.editFinance('${f.id}')" class="text-sky-400 hover:text-sky-300"><i class="fa-solid fa-pen-to-square"></i></button>
-          <button onclick="FlunaAdmin.deleteFinance('${f.id}')" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button>
+          <button onclick="FlunaAdmin.editFinance('${esc(f.id)}')" class="text-sky-400 hover:text-sky-300"><i class="fa-solid fa-pen-to-square"></i></button>
+          <button onclick="FlunaAdmin.deleteFinance('${esc(f.id)}')" class="text-rose-400 hover:text-rose-300"><i class="fa-solid fa-trash"></i></button>
         </td>
       </tr>
     `).join('');
@@ -564,7 +731,11 @@ const FlunaAdmin = {
 
   async deleteFinance(id) {
     if (confirm('¿Estás seguro de que deseas eliminar este registro financiero? Se recalcularán las métricas automáticamente.')) {
-      await FlunaDB.deleteFinanceRecord(id);
+      const { error } = await FlunaDB.deleteFinanceRecord(id);
+      if (error) {
+        alert('No se pudo eliminar el registro: ' + FlunaUtils.errorMessage(error));
+        return;
+      }
       this.loadAllData();
     }
   },
@@ -576,7 +747,7 @@ const FlunaAdmin = {
     if (purchaseIngSelect) {
       const searchTerm = document.getElementById('purchaseIngSearch')?.value.toLowerCase().trim() || '';
       const filtered = this.state.ingredients.filter(i => i.name.toLowerCase().includes(searchTerm));
-      purchaseIngSelect.innerHTML = filtered.map(i => `<option value="${i.id}">${i.name} (${i.unit})</option>`).join('');
+      purchaseIngSelect.innerHTML = filtered.map(i => `<option value="${esc(i.id)}">${esc(i.name)} (${esc(i.unit)})</option>`).join('');
     }
 
     const agotadoCol = document.getElementById('stock-col-agotado');
@@ -604,24 +775,24 @@ const FlunaAdmin = {
         <div class="glass-card p-4 space-y-3 border ${isAgotado ? 'border-rose-500/30' : isAlert ? 'border-yellow-500/30' : 'border-white/5'} hover:border-orange-500/40 transition">
           <div class="flex justify-between items-start">
             <div>
-              <h5 class="text-sm font-bold text-white">${ing.name}</h5>
-              <span class="text-[10px] text-slate-500 font-mono">Costo: $${Number(ing.cost_per_unit).toLocaleString('es-AR')} / ${ing.unit}</span>
+              <h5 class="text-sm font-bold text-white">${esc(ing.name)}</h5>
+              <span class="text-[10px] text-slate-500 font-mono">Costo: ${FlunaUtils.formatARS(ing.cost_per_unit)} / ${esc(ing.unit)}</span>
             </div>
             <div class="flex gap-2" onclick="event.stopPropagation()">
-              <button onclick="FlunaAdmin.editIngredient('${ing.id}')" class="text-sky-400 hover:text-sky-300 text-xs"><i class="fa-solid fa-pen-to-square"></i></button>
-              <button onclick="FlunaAdmin.deleteIngredient('${ing.id}')" class="text-rose-400 hover:text-rose-300 text-xs"><i class="fa-solid fa-trash"></i></button>
+              <button onclick="FlunaAdmin.editIngredient('${esc(ing.id)}')" class="text-sky-400 hover:text-sky-300 text-xs"><i class="fa-solid fa-pen-to-square"></i></button>
+              <button onclick="FlunaAdmin.deleteIngredient('${esc(ing.id)}')" class="text-rose-400 hover:text-rose-300 text-xs"><i class="fa-solid fa-trash"></i></button>
             </div>
           </div>
 
           <div class="space-y-1">
             <div class="flex justify-between text-xs font-mono">
               <span class="text-slate-400">Stock actual:</span>
-              <span class="font-extrabold ${isAgotado ? 'text-rose-400' : isAlert ? 'text-yellow-400' : 'text-emerald-400'}">${current} ${ing.unit}</span>
+              <span class="font-extrabold ${isAgotado ? 'text-rose-400' : isAlert ? 'text-yellow-400' : 'text-emerald-400'}">${current} ${esc(ing.unit)}</span>
             </div>
             <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
               <div class="h-full ${isAgotado ? 'bg-rose-500' : isAlert ? 'bg-yellow-500' : 'bg-emerald-500'}" style="width: ${pct}%"></div>
             </div>
-            <div class="text-[10px] text-slate-500 font-mono text-right">Alerta en: ${min} ${ing.unit}</div>
+            <div class="text-[10px] text-slate-500 font-mono text-right">Alerta en: ${min} ${esc(ing.unit)}</div>
           </div>
         </div>
       `;
@@ -638,16 +809,34 @@ const FlunaAdmin = {
     const ing = this.state.ingredients.find(i => i.id === ingId);
     if (!ing) return;
 
+    const quantity = parseFloat(document.getElementById('purchaseQty').value);
+    const totalCost = parseFloat(document.getElementById('purchaseCost').value);
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      alert('La cantidad comprada debe ser un número mayor a 0.');
+      return;
+    }
+    if (!Number.isFinite(totalCost) || totalCost < 0) {
+      alert('El costo total debe ser un número válido.');
+      return;
+    }
+
     const purchaseData = {
       ingredient_id: ing.id,
       ingredient_name: ing.name,
-      quantity: parseFloat(document.getElementById('purchaseQty').value),
-      total_cost: parseFloat(document.getElementById('purchaseCost').value),
+      quantity: quantity,
+      total_cost: totalCost,
       supplier: document.getElementById('purchaseSupplier').value.trim()
     };
 
-    await FlunaDB.registerPurchase(purchaseData);
+    const res = await FlunaDB.registerPurchase(purchaseData);
+    if (res.error) {
+      alert('No se pudo registrar la compra: ' + FlunaUtils.errorMessage(res.error));
+      return;
+    }
+
     document.getElementById('purchaseModal').classList.add('hidden');
+    document.getElementById('purchaseModal').classList.remove('flex');
     this.loadAllData();
   },
 
@@ -739,8 +928,8 @@ const FlunaAdmin = {
 
       // Filtro por búsqueda
       if (search) {
-        const matchesName = cust.name.toLowerCase().includes(search);
-        const matchesMsg = cust.lastMsg.toLowerCase().includes(search);
+        const matchesName = String(cust.name || '').toLowerCase().includes(search);
+        const matchesMsg = String(cust.lastMsg || '').toLowerCase().includes(search);
         if (!matchesName && !matchesMsg) return false;
       }
 
@@ -765,27 +954,27 @@ const FlunaAdmin = {
       const isSelected = this.state.activeChatCustomer === cId;
 
       return `
-        <div onclick="FlunaAdmin.selectChatCustomer('${cId}')" 
+        <div onclick="FlunaAdmin.selectChatCustomer('${esc(cId)}')"
              class="p-3.5 border-b border-white/5 hover:bg-slate-900/80 cursor-pointer transition relative ${isSelected ? 'bg-orange-500/10 border-l-4 border-l-orange-500' : ''}">
           <div class="flex items-center justify-between gap-1 mb-1">
             <div class="flex items-center gap-1.5 min-w-0">
-              <h5 class="text-xs font-bold text-white truncate">${cust.name}</h5>
+              <h5 class="text-xs font-bold text-white truncate">${esc(cust.name)}</h5>
               <span class="tag-web-channel flex-shrink-0">WEB</span>
             </div>
             ${cust.unreadCount > 0 ? `<span class="unread-bubble">${cust.unreadCount}</span>` : ''}
           </div>
 
-          <p class="text-[11px] text-slate-400 truncate mb-2">${cust.lastMsg}</p>
+          <p class="text-[11px] text-slate-400 truncate mb-2">${esc(cust.lastMsg)}</p>
 
           <div class="flex items-center justify-between text-[10px]">
             ${order ? `
               <span class="chat-order-pill text-orange-400 font-bold flex items-center gap-1">
-                <i class="fa-solid fa-receipt text-[9px]"></i> #${order.id} • ${order.status}
+                <i class="fa-solid fa-receipt text-[9px]"></i> #${esc(order.id)} • ${esc(order.status)}
               </span>
             ` : `
               <span class="chat-order-pill text-slate-500">Sin pedido activo</span>
             `}
-            <span class="text-slate-500 font-mono text-[9px]">${new Date(cust.time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+            <span class="text-slate-500 font-mono text-[9px]">${FlunaUtils.formatTime(cust.time)}</span>
           </div>
         </div>
       `;
@@ -818,7 +1007,7 @@ const FlunaAdmin = {
     if (pillEl) {
       pillEl.innerHTML = order ? `
         <span class="chat-order-pill text-orange-400 font-bold inline-flex items-center gap-1">
-          <i class="fa-solid fa-receipt"></i> Pedido #${order.id} • Estado: ${order.status}
+          <i class="fa-solid fa-receipt"></i> Pedido #${esc(order.id)} • Estado: ${esc(order.status)}
         </span>
       ` : `<span class="chat-order-pill text-slate-500">Sin pedido activo vinculado</span>`;
     }
@@ -841,7 +1030,7 @@ const FlunaAdmin = {
       this.state.archivedCustomers.push(cId);
     }
 
-    localStorage.setItem('fluna_archived_chats', JSON.stringify(this.state.archivedCustomers));
+    FlunaUtils.writeJSON('fluna_archived_chats', this.state.archivedCustomers);
     this.selectChatCustomer(cId);
   },
 
@@ -875,8 +1064,8 @@ const FlunaAdmin = {
           <div class="max-w-[75%] px-3 py-2 rounded-xl text-xs ${
             isAdmin ? 'bg-orange-600 text-white rounded-br-none' : 'bg-slate-800 text-slate-200 border border-white/10 rounded-bl-none'
           }">
-            <p>${m.message}</p>
-            <span class="text-[9px] opacity-70 block text-right font-mono mt-1">${new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+            <p class="whitespace-pre-wrap break-words">${esc(m.message)}</p>
+            <span class="text-[9px] opacity-70 block text-right font-mono mt-1">${FlunaUtils.formatTime(m.created_at)}</span>
           </div>
         </div>
       `;
@@ -899,10 +1088,16 @@ const FlunaAdmin = {
       customer_id: this.state.activeChatCustomer,
       customer_name: 'Atención FLuna',
       sender_role: 'admin',
-      message: text
+      message: text.slice(0, 2000)
     };
 
-    await FlunaDB.sendMessage(msgData);
+    const { error } = await FlunaDB.sendMessage(msgData);
+    if (error) {
+      alert('No se pudo enviar el mensaje: ' + FlunaUtils.errorMessage(error));
+      input.value = text;
+      return;
+    }
+
     this.loadAllData();
   },
 
@@ -917,7 +1112,7 @@ const FlunaAdmin = {
     }
 
     select.innerHTML = this.state.products.map(p => `
-      <option value="${p.id}">${p.name} ($${Number(p.price).toLocaleString('es-AR')}) - ${p.category}</option>
+      <option value="${esc(p.id)}">${esc(p.name)} (${FlunaUtils.formatARS(p.price)}) - ${esc(p.category)}</option>
     `).join('');
   },
 
@@ -1010,7 +1205,7 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
 
     this.state.marketingHistory.unshift(historyItem);
     if (this.state.marketingHistory.length > 20) this.state.marketingHistory.pop();
-    localStorage.setItem('fluna_mk_history', JSON.stringify(this.state.marketingHistory));
+    FlunaUtils.writeJSON('fluna_mk_history', this.state.marketingHistory);
 
     this.renderMarketingHistory();
   },
@@ -1125,15 +1320,15 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
     container.innerHTML = this.state.marketingHistory.map(item => `
       <div class="glass-card p-4 space-y-2 border border-white/5 hover:border-orange-500/40 transition text-xs relative group">
         <div class="flex items-center justify-between">
-          <span class="font-bold text-white truncate">${item.productName}</span>
-          <span class="text-[10px] font-mono text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20">${item.format}</span>
+          <span class="font-bold text-white truncate">${esc(item.productName)}</span>
+          <span class="text-[10px] font-mono text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20">${esc(item.format)}</span>
         </div>
-        <p class="text-[10px] text-slate-400 line-clamp-2 font-mono">${item.content.substring(0, 120)}...</p>
+        <p class="text-[10px] text-slate-400 line-clamp-2 font-mono">${esc(String(item.content || '').substring(0, 120))}...</p>
         <div class="flex justify-between items-center pt-2 border-t border-white/5 text-[10px] font-mono">
-          <span class="text-slate-500">${item.date}</span>
+          <span class="text-slate-500">${esc(item.date)}</span>
           <div class="flex items-center gap-2">
-            <button onclick="FlunaAdmin.loadMarketingHistoryItem('${item.id}')" class="text-orange-400 font-bold hover:underline">Ver / Cargar</button>
-            <button onclick="FlunaAdmin.deleteMarketingHistoryItem('${item.id}')" class="text-slate-400 hover:text-rose-400 transition p-1" title="Eliminar tarjeta">
+            <button onclick="FlunaAdmin.loadMarketingHistoryItem('${esc(item.id)}')" class="text-orange-400 font-bold hover:underline">Ver / Cargar</button>
+            <button onclick="FlunaAdmin.deleteMarketingHistoryItem('${esc(item.id)}')" class="text-slate-400 hover:text-rose-400 transition p-1" title="Eliminar tarjeta">
               <i class="fa-solid fa-trash-can"></i>
             </button>
           </div>
@@ -1144,7 +1339,7 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
 
   deleteMarketingHistoryItem(id) {
     this.state.marketingHistory = this.state.marketingHistory.filter(item => item.id !== id);
-    localStorage.setItem('fluna_mk_history', JSON.stringify(this.state.marketingHistory));
+    FlunaUtils.writeJSON('fluna_mk_history', this.state.marketingHistory);
     this.renderMarketingHistory();
   },
 
@@ -1152,7 +1347,7 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
     const item = this.state.marketingHistory.find(i => i.id === id);
     if (item) {
       const prod = this.state.products.find(p => p.name === item.productName) || { name: item.productName, category: 'Pizzas' };
-      const isStory = item.format.includes('9:16');
+      const isStory = String(item.format || '').includes('9:16');
       this.renderInstagramCardMockup(item.content, prod, isStory ? 'story' : 'feed', item.angle);
     }
   },
@@ -1167,7 +1362,8 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
 
   // --- REALTIME SUBSCRIPTION ADMIN ---
   initRealtimeSubscriptions() {
-    FlunaDB.subscribeOrders(() => {
+    FlunaDB.subscribeOrders((payload) => {
+      this.notificarCambioDePedido(payload);
       this.loadAllData();
     });
 
@@ -1219,17 +1415,17 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
       tbody.innerHTML = order.order_items.map(item => {
         let opts = [];
         if (item.selected_options) {
-          if (item.selected_options.size) opts.push(`Tamaño: ${item.selected_options.size}`);
+          if (item.selected_options.size) opts.push(`Tamaño: ${esc(item.selected_options.size)}`);
           if (item.selected_options.extra_cheese) opts.push(`+ Muzzarella Extra`);
-          if (item.selected_options.notes) opts.push(`Notas: ${item.selected_options.notes}`);
+          if (item.selected_options.notes) opts.push(`Notas: ${esc(item.selected_options.notes)}`);
         }
         return `
           <tr class="border-b border-white/5 font-mono">
-            <td class="p-3 text-white font-sans font-semibold">${item.product_name}</td>
-            <td class="p-3">${item.quantity}</td>
-            <td class="p-3">$${Number(item.unit_price).toLocaleString('es-AR')}</td>
+            <td class="p-3 text-white font-sans font-semibold">${esc(item.product_name)}</td>
+            <td class="p-3">${esc(item.quantity)}</td>
+            <td class="p-3">${FlunaUtils.formatARS(item.unit_price)}</td>
             <td class="p-3 text-slate-400 font-sans text-[10px] max-w-[200px] break-words">${opts.join('<br>') || 'Ninguna'}</td>
-            <td class="p-3 font-bold text-white">$${Number(item.subtotal).toLocaleString('es-AR')}</td>
+            <td class="p-3 font-bold text-white">${FlunaUtils.formatARS(item.subtotal)}</td>
           </tr>
         `;
       }).join('');
@@ -1292,7 +1488,11 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
 
   async deleteIngredient(id) {
     if (confirm('¿Eliminar este insumo del inventario? Esto afectará las recetas que lo utilicen.')) {
-      await FlunaDB.deleteIngredient(id);
+      const { error } = await FlunaDB.deleteIngredient(id);
+      if (error) {
+        alert('No se pudo eliminar el insumo: ' + FlunaUtils.errorMessage(error));
+        return;
+      }
       this.loadAllData();
     }
   },
@@ -1308,13 +1508,23 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
       cost_per_unit: parseFloat(document.getElementById('ingFormCost').value)
     };
 
-    if (id) {
-      await FlunaDB.updateIngredient(id, ingData);
-    } else {
-      await FlunaDB.createIngredient(ingData);
+    const numericFields = ['current_stock', 'min_stock_alert', 'cost_per_unit'];
+    if (!ingData.name || numericFields.some(f => !Number.isFinite(ingData[f]) || ingData[f] < 0)) {
+      alert('Completá el nombre y valores numéricos válidos (mayores o iguales a 0) para stock, alerta y costo.');
+      return;
+    }
+
+    const res = id
+      ? await FlunaDB.updateIngredient(id, ingData)
+      : await FlunaDB.createIngredient(ingData);
+
+    if (res.error) {
+      alert('No se pudo guardar el insumo: ' + FlunaUtils.errorMessage(res.error));
+      return;
     }
 
     document.getElementById('ingredientModal').classList.add('hidden');
+    document.getElementById('ingredientModal').classList.remove('flex');
     this.loadAllData();
   },
 
@@ -1325,7 +1535,7 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
 
     const rowId = 'recipe-row-' + Date.now() + Math.round(Math.random() * 1000);
     const options = this.state.ingredients.map(ing => `
-      <option value="${ing.id}" ${ing.id === ingredientId ? 'selected' : ''}>${ing.name} (${ing.unit})</option>
+      <option value="${esc(ing.id)}" ${ing.id === ingredientId ? 'selected' : ''}>${esc(ing.name)} (${esc(ing.unit)})</option>
     `).join('');
 
     const html = `
@@ -1690,6 +1900,250 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
     }
   },
 
+  /**
+   * Avisos en pantalla ante cambios de pedidos en tiempo real.
+   *
+   * Supabase manda solo la clave primaria en `payload.old` (a menos que la
+   * tabla tenga REPLICA IDENTITY FULL), así que comparamos contra el estado
+   * local, que todavía tiene la versión anterior porque loadAllData() corre
+   * después de esta función.
+   */
+  notificarCambioDePedido(payload) {
+    const nuevo = payload?.new;
+    if (!nuevo) return;
+
+    const anterior = this.state.orders.find(o => o.id === nuevo.id);
+
+    if (payload.eventType === 'INSERT' && !anterior) {
+      FlunaUtils.toast(
+        `Nuevo pedido #${nuevo.id}`,
+        `${nuevo.customer_name || 'Cliente'} · ${FlunaUtils.formatARS(nuevo.total_amount)}`,
+        'info'
+      );
+      FlunaUtils.playChime();
+      return;
+    }
+
+    if (!anterior) return;
+
+    // Pago acreditado: es el aviso que más importa en el mostrador.
+    if (anterior.payment_status !== 'approved' && nuevo.payment_status === 'approved') {
+      FlunaUtils.toast(
+        `¡Pago acreditado! #${nuevo.id}`,
+        `${FlunaUtils.formatARS(nuevo.total_amount)} de ${nuevo.customer_name || 'Cliente'}. Ya figura en Finanzas.`,
+        'success',
+        10000
+      );
+      FlunaUtils.playChime();
+      return;
+    }
+
+    if (anterior.payment_status !== 'rejected' && nuevo.payment_status === 'rejected') {
+      FlunaUtils.toast(
+        `Pago rechazado #${nuevo.id}`,
+        `${nuevo.customer_name || 'Cliente'} · ${FlunaUtils.formatARS(nuevo.total_amount)}`,
+        'error',
+        10000
+      );
+      return;
+    }
+
+    if (anterior.status !== nuevo.status) {
+      FlunaUtils.toast(`Pedido #${nuevo.id}`, `Pasó a "${nuevo.status}".`, 'info', 4000);
+    }
+  },
+
+  // --- INTEGRACIONES (MERCADO PAGO) ---
+  /** Lee el resultado del OAuth cuando Mercado Pago nos devuelve al panel. */
+  procesarRetornoOAuth() {
+    const params = new URLSearchParams(window.location.search);
+    const mp = params.get('mp');
+    if (!mp) return;
+
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    if (mp === 'conectado') {
+      const modo = params.get('modo') === 'produccion' ? 'producción' : 'prueba';
+      FlunaUtils.toast(
+        'Mercado Pago conectado',
+        `Cuenta ${params.get('cuenta') || ''} vinculada en modo ${modo}.`,
+        'success',
+        9000
+      );
+    } else {
+      FlunaUtils.toast(
+        'No se pudo conectar Mercado Pago',
+        params.get('motivo') || 'Intentá de nuevo.',
+        'error',
+        12000
+      );
+    }
+
+    this.switchTab('integraciones');
+  },
+
+  async renderIntegrationsSection() {
+    const container = document.getElementById('integrationsContent');
+    if (!container) return;
+
+    container.innerHTML = `
+      <div class="glass-card p-8 text-center text-slate-400 text-sm">
+        <i class="fa-solid fa-spinner fa-spin text-orange-500 text-2xl mb-3 block"></i>
+        Consultando el estado de la integración…
+      </div>
+    `;
+
+    let data;
+    try {
+      ({ data } = await this.adminFetch('/api/mp-status'));
+    } catch (err) {
+      container.innerHTML = `
+        <div class="glass-card p-8 text-center text-rose-400 text-sm">
+          <i class="fa-solid fa-triangle-exclamation text-2xl mb-3 block"></i>
+          No se pudo consultar el estado: ${esc(err.message)}
+        </div>
+      `;
+      return;
+    }
+
+    const avisoConfig = !data.configurado ? `
+      <div class="bg-rose-500/10 border border-rose-500/25 rounded-xl p-4 text-xs text-rose-300 space-y-1">
+        <p class="font-bold text-rose-200"><i class="fa-solid fa-circle-exclamation"></i> Falta configurar la aplicación</p>
+        <p>Definí <span class="font-mono">MP_CLIENT_ID</span> y <span class="font-mono">MP_CLIENT_SECRET</span> en las variables de entorno de Vercel.</p>
+      </div>
+    ` : '';
+
+    const avisoWebhook = data.configurado && !data.webhookSecretConfigurado ? `
+      <div class="bg-yellow-500/10 border border-yellow-500/25 rounded-xl p-4 text-xs text-yellow-200 space-y-1">
+        <p class="font-bold"><i class="fa-solid fa-triangle-exclamation"></i> Falta la clave secreta del webhook</p>
+        <p>Sin <span class="font-mono">MP_WEBHOOK_SECRET</span> se rechazan todas las notificaciones y los pedidos no se van a actualizar solos.</p>
+      </div>
+    ` : '';
+
+    if (!data.connected) {
+      container.innerHTML = `
+        <div class="space-y-4 max-w-2xl">
+          ${avisoConfig}
+          ${avisoWebhook}
+          <div class="glass-card p-8 space-y-5 text-center">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-sky-500/15 text-sky-400 text-3xl">
+              <i class="fa-solid fa-link-slash"></i>
+            </div>
+            <div>
+              <h3 class="text-lg font-black text-white">Mercado Pago no está conectado</h3>
+              <p class="text-xs text-slate-400 mt-2 max-w-md mx-auto">
+                Conectá tu cuenta para cobrar online. Los pagos entran directo a tu cuenta de Mercado Pago
+                y los pedidos se actualizan solos en el pipeline.
+              </p>
+            </div>
+            <button onclick="FlunaAdmin.conectarMercadoPago()" ${data.configurado ? '' : 'disabled'}
+               class="btn-fluna inline-flex items-center justify-center gap-2 py-3 px-6 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed">
+              <i class="fa-brands fa-mercado-pago text-base"></i> Conectar mi Mercado Pago
+            </button>
+            <p class="text-[10px] text-slate-500">Te vamos a llevar al sitio oficial de Mercado Pago para autorizar la conexión.</p>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const alertaVencimiento = data.diasRestantes !== null && data.diasRestantes < 15 ? `
+      <div class="bg-yellow-500/10 border border-yellow-500/25 rounded-xl p-3 text-xs text-yellow-200">
+        <i class="fa-solid fa-clock"></i> La autorización vence en ${data.diasRestantes} días. Se renueva sola, pero si falla vas a tener que reconectar.
+      </div>
+    ` : '';
+
+    container.innerHTML = `
+      <div class="space-y-4 max-w-2xl">
+        ${avisoWebhook}
+        <div class="glass-card p-6 space-y-5">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex items-center gap-3">
+              <div class="w-12 h-12 rounded-xl bg-emerald-500/15 text-emerald-400 text-2xl flex items-center justify-center">
+                <i class="fa-solid fa-circle-check"></i>
+              </div>
+              <div>
+                <h3 class="text-base font-black text-white">Mercado Pago conectado</h3>
+                <p class="text-[11px] text-slate-400 mt-0.5">Los cobros online están activos.</p>
+              </div>
+            </div>
+            <span class="badge-status ${data.liveMode ? 'badge-aprobada' : 'badge-cocina'} text-[10px]">
+              ${data.liveMode ? 'PRODUCCIÓN' : 'PRUEBA'}
+            </span>
+          </div>
+
+          ${alertaVencimiento}
+
+          <div class="grid grid-cols-2 gap-3 text-xs">
+            <div class="bg-slate-900/70 rounded-xl p-3 border border-white/5">
+              <span class="text-[10px] text-slate-500 block mb-0.5">Cuenta vinculada</span>
+              <span class="font-mono text-white font-bold">${esc(data.mpUserId || '—')}</span>
+            </div>
+            <div class="bg-slate-900/70 rounded-xl p-3 border border-white/5">
+              <span class="text-[10px] text-slate-500 block mb-0.5">Autorización vence</span>
+              <span class="font-mono text-white font-bold">${data.expiraEl ? FlunaUtils.formatDate(data.expiraEl) : '—'}</span>
+            </div>
+          </div>
+
+          ${data.feePorcentaje > 0 ? `
+            <div class="bg-slate-900/70 rounded-xl p-3 border border-white/5 text-xs">
+              <span class="text-[10px] text-slate-500 block mb-0.5">Comisión de la plataforma</span>
+              <span class="font-mono text-orange-400 font-bold">${data.feePorcentaje}%</span>
+              <span class="text-slate-500"> por cada venta cobrada online</span>
+            </div>
+          ` : ''}
+
+          <div class="flex gap-2 pt-1">
+            <button onclick="FlunaAdmin.conectarMercadoPago()" class="btn-fluna-outline flex-1 text-center py-2.5 text-xs font-bold">
+              <i class="fa-solid fa-rotate"></i> Reconectar
+            </button>
+            <button onclick="FlunaAdmin.desconectarMercadoPago()" class="flex-1 py-2.5 text-xs font-bold rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/25 hover:bg-rose-500/20 transition">
+              <i class="fa-solid fa-link-slash"></i> Desconectar
+            </button>
+          </div>
+        </div>
+
+        <div class="glass-card p-5 text-xs text-slate-400 space-y-2">
+          <p class="font-bold text-white text-sm"><i class="fa-solid fa-circle-info text-orange-400"></i> Cómo funciona</p>
+          <p>Cuando un cliente elige Mercado Pago, el monto se calcula automáticamente a partir de su pedido y se lo lleva al checkout oficial.</p>
+          <p>Al confirmarse el pago, Mercado Pago nos avisa y el pedido pasa solo a <span class="text-emerald-400 font-semibold">Aprobada</span>, con el ingreso registrado en Finanzas.</p>
+        </div>
+      </div>
+    `;
+  },
+
+  /** Pide la URL de autorización y redirige. El token va por header, no por URL. */
+  async conectarMercadoPago() {
+    try {
+      const { data } = await this.adminFetch('/api/mp-connect', { method: 'POST' });
+
+      if (!data.ok || !data.url) {
+        FlunaUtils.toast('No se pudo iniciar la conexión', data.error || '', 'error', 10000);
+        return;
+      }
+
+      window.location.href = data.url;
+    } catch (err) {
+      FlunaUtils.toast('No se pudo iniciar la conexión', err.message, 'error');
+    }
+  },
+
+  async desconectarMercadoPago() {
+    if (!confirm('¿Desconectar la cuenta de Mercado Pago? Vas a dejar de poder cobrar online hasta reconectarla.')) return;
+
+    try {
+      const { data } = await this.adminFetch('/api/mp-status', { method: 'DELETE' });
+      if (data.ok) {
+        FlunaUtils.toast('Cuenta desconectada', 'Ya no se pueden recibir pagos online.', 'warning');
+        this.renderIntegrationsSection();
+      } else {
+        FlunaUtils.toast('No se pudo desconectar', data.error || '', 'error');
+      }
+    } catch (err) {
+      FlunaUtils.toast('No se pudo desconectar', err.message, 'error');
+    }
+  },
+
   // --- GESTIÓN DE PEDIDOS MANUALES (PIPELINE) ---
   async openManualOrderModal() {
     this.state.manualOrderItems = {};
@@ -1747,16 +2201,16 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
       return `
         <div class="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-white/5">
           <div class="flex items-center gap-2">
-            <img src="${prod.image_url || 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600'}" class="w-8 h-8 object-cover rounded">
+            <img src="${FlunaUtils.safeImageUrl(prod.image_url)}" alt="" loading="lazy" class="w-8 h-8 object-cover rounded">
             <div>
-              <span class="font-bold text-white block truncate max-w-[200px]">${prod.name}</span>
-              <span class="text-[10px] font-mono text-orange-400">$${Number(prod.price).toLocaleString('es-AR')}</span>
+              <span class="font-bold text-white block truncate max-w-[200px]">${esc(prod.name)}</span>
+              <span class="text-[10px] font-mono text-orange-400">${FlunaUtils.formatARS(prod.price)}</span>
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <button type="button" onclick="FlunaAdmin.updateManualOrderQty('${prod.id}', -1)" class="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center">-</button>
-            <span id="manualQty_${prod.id}" class="font-mono font-bold text-white w-5 text-center">${qty}</span>
-            <button type="button" onclick="FlunaAdmin.updateManualOrderQty('${prod.id}', 1)" class="w-6 h-6 rounded bg-orange-500 hover:bg-orange-600 text-white font-bold flex items-center justify-center">+</button>
+            <button type="button" onclick="FlunaAdmin.updateManualOrderQty('${esc(prod.id)}', -1)" class="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-white font-bold flex items-center justify-center">-</button>
+            <span id="manualQty_${esc(prod.id)}" class="font-mono font-bold text-white w-5 text-center">${qty}</span>
+            <button type="button" onclick="FlunaAdmin.updateManualOrderQty('${esc(prod.id)}', 1)" class="w-6 h-6 rounded bg-orange-500 hover:bg-orange-600 text-white font-bold flex items-center justify-center">+</button>
           </div>
         </div>
       `;
@@ -1792,6 +2246,9 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
   async handleSaveManualOrder(e) {
     e.preventDefault();
 
+    // Un doble clic acá creaba dos pedidos con dos ingresos en Finanzas.
+    if (this.state.isSavingManualOrder) return;
+
     const customerName = document.getElementById('manualOrderCustomer').value.trim();
     const phone = document.getElementById('manualOrderPhone').value.trim();
     const deliveryType = document.getElementById('manualOrderDeliveryType').value;
@@ -1823,10 +2280,9 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
     }
 
     const totalAmount = this.updateManualOrderTotal();
-    const newOrderId = 'FL-' + Math.floor(1000 + Math.random() * 9000);
 
     const orderData = {
-      id: newOrderId,
+      id: FlunaUtils.generateOrderId(),
       customer_id: 'MANUAL_ADMIN',
       customer_name: customerName,
       customer_phone: phone,
@@ -1840,26 +2296,36 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
       notes: notes ? `[PEDIDO MANUAL] ${notes}` : '[PEDIDO MANUAL POR MOSTRADOR/TELÉFONO]'
     };
 
-    const res = await FlunaDB.createOrder(orderData, selectedItems);
-    if (res.error) {
-      alert('Error al registrar el pedido manual: ' + res.error.message);
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    this.state.isSavingManualOrder = true;
+    if (submitBtn) submitBtn.disabled = true;
+
+    let res;
+    try {
+      res = await FlunaDB.createOrder(orderData, selectedItems);
+    } finally {
+      this.state.isSavingManualOrder = false;
+      if (submitBtn) submitBtn.disabled = false;
+    }
+
+    if (res.error || !res.data) {
+      alert('Error al registrar el pedido manual: ' + FlunaUtils.errorMessage(res.error));
       return;
     }
 
-    if (paymentStatus === 'approved') {
-      await FlunaDB.addFinanceRecord({
-        type: 'income',
-        category: 'sales',
-        amount: totalAmount,
-        description: `Venta Manual #${newOrderId} - ${customerName}`,
-        date: new Date().toISOString().split('T')[0]
-      });
+    const createdId = res.data.id;
+
+    if (res.itemsError) {
+      alert(`El pedido #${createdId} se creó, pero falló el guardado de los items. Revisalo antes de despacharlo.`);
     }
+
+    // El ingreso en Finanzas lo inserta el trigger fn_sync_order_finance de la
+    // base cuando payment_status = 'approved'. No lo duplicamos desde acá.
 
     document.getElementById('manualOrderModal')?.classList.add('hidden');
     document.getElementById('manualOrderModal')?.classList.remove('flex');
 
-    alert(`¡Pedido manual #${newOrderId} creado exitosamente en la etapa "${orderStatus}"!`);
+    alert(`¡Pedido manual #${createdId} creado exitosamente en la etapa "${orderStatus}"!`);
     await this.loadAllData();
   }
 };
