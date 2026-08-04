@@ -233,12 +233,7 @@
           <!-- Filtro Categoría -->
           <select id="adminProdCatFilter" class="bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500">
             <option value="Todas">Todas las categorías</option>
-            <option value="Pizzas">Pizzas</option>
-            <option value="Empanadas">Empanadas</option>
-            <option value="Combos">⚡ Combos</option>
-            <option value="Ofertas">🔥 Ofertas & Promos</option>
-            <option value="Bebidas">Bebidas</option>
-            <option value="Postres">Postres</option>
+            <!-- Se llena dinámicamente desde admin.js -->
           </select>
 
           <button onclick="document.getElementById('productFormModal').classList.remove('hidden'); document.getElementById('productFormModal').classList.add('flex'); document.getElementById('productForm').reset(); document.getElementById('prodFormId').value='';" class="btn-fluna py-2 px-4 text-xs font-bold flex items-center gap-2">
@@ -782,33 +777,81 @@
           <label class="block font-bold text-slate-300 mb-1">Nombre</label>
           <input type="text" id="prodFormName" required class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
         </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <label class="block font-bold text-slate-300 mb-1">Categoría</label>
-            <select id="prodFormCategory" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
-              <option value="Pizzas">Pizzas</option>
-              <option value="Empanadas">Empanadas</option>
-              <option value="Combos">⚡ Combos Especiales</option>
-              <option value="Ofertas">🔥 Oferta & Descuento</option>
-              <option value="Bebidas">Bebidas</option>
-              <option value="Postres">Postres</option>
-            </select>
-          </div>
-          <div>
-            <label class="block font-bold text-slate-300 mb-1">Precio ($)</label>
-            <input type="number" step="0.01" id="prodFormPrice" required class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Categoría</label>
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+            <select id="prodFormCategory" class="flex-1 w-full min-w-0 bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white"></select>
+            <div class="flex items-center gap-1 self-end sm:self-auto bg-slate-950 px-1 py-0.5 rounded-lg border border-white/5">
+              <button type="button" onclick="FlunaAdmin.addCategoryInline()" class="text-slate-500 hover:text-orange-400 p-2 transition rounded hover:bg-slate-900 text-[10px]" title="Crear categoría"><i class="fa-solid fa-plus"></i></button>
+              <button type="button" onclick="FlunaAdmin.editCategoryInline()" class="text-slate-500 hover:text-sky-400 p-2 transition rounded hover:bg-slate-900 text-[10px]" title="Editar categoría"><i class="fa-solid fa-pen"></i></button>
+              <button type="button" onclick="FlunaAdmin.deleteCategoryInline()" class="text-slate-500 hover:text-rose-400 p-2 transition rounded hover:bg-slate-900 text-[10px]" title="Eliminar categoría"><i class="fa-solid fa-trash"></i></button>
+            </div>
           </div>
         </div>
-        <div class="grid grid-cols-2 gap-2">
+
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">Subcategoría <span class="text-slate-500 font-normal">(opcional)</span></label>
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+            <select id="prodFormSubcategory" class="flex-1 w-full min-w-0 bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+              <option value="">— Sin subcategoría —</option>
+            </select>
+            <div class="flex items-center gap-1 self-end sm:self-auto bg-slate-950 px-1 py-0.5 rounded-lg border border-white/5">
+              <button type="button" onclick="FlunaAdmin.addSubcategoryInline()" class="text-slate-500 hover:text-orange-400 p-2 transition rounded hover:bg-slate-900 text-[10px]" title="Crear subcategoría"><i class="fa-solid fa-plus"></i></button>
+              <button type="button" onclick="FlunaAdmin.editSubcategoryInline()" class="text-slate-500 hover:text-sky-400 p-2 transition rounded hover:bg-slate-900 text-[10px]" title="Editar subcategoría"><i class="fa-solid fa-pen"></i></button>
+              <button type="button" onclick="FlunaAdmin.deleteSubcategoryInline()" class="text-slate-500 hover:text-rose-400 p-2 transition rounded hover:bg-slate-900 text-[10px]" title="Eliminar subcategoría"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block font-bold text-slate-300 mb-1" id="labelProdFormPrice">Precio ($)</label>
+            <input type="number" id="prodFormPrice" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white" min="0" step="0.01" required>
+          </div>
           <div>
             <label class="block font-bold text-slate-300 mb-1">Stock Disponible</label>
-            <input type="number" id="prodFormStock" required value="50" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
-          </div>
-          <div class="flex items-center gap-2 pt-5">
-            <input type="checkbox" id="prodFormActive" checked class="accent-orange-500 w-4 h-4">
-            <label for="prodFormActive" class="font-bold text-slate-300">Producto Activo</label>
+            <input type="number" id="prodFormStock" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white" min="0" required>
           </div>
         </div>
+
+        <div id="empanadasPrices" class="hidden grid-cols-2 gap-4">
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Media Docena ($)</label>
+            <input type="number" id="prodFormPriceHalf" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white" min="0" step="0.01">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-300 mb-1">Docena ($)</label>
+            <input type="number" id="prodFormPriceDozen" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white" min="0" step="0.01">
+          </div>
+        </div>
+
+        <!-- CLASIFICACIÓN DINÁMICA -->
+        <div>
+          <label class="block font-bold text-slate-300 mb-1">
+            Clasificación <span class="text-slate-500 font-normal">(opcional)</span>
+          </label>
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+            <select id="prodFormClassification" class="flex-1 w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
+              <option value="">— Sin clasificación —</option>
+            </select>
+            <div class="flex items-center gap-1 self-end sm:self-auto bg-slate-950 px-1 py-0.5 rounded-lg border border-white/5">
+              <button type="button" onclick="FlunaAdmin.addClassificationInline()" class="text-slate-500 hover:text-orange-400 p-2 transition rounded hover:bg-slate-900 text-[10px]" title="Crear clasificación"><i class="fa-solid fa-plus"></i></button>
+              <button type="button" onclick="FlunaAdmin.editClassificationInline()" class="text-slate-500 hover:text-sky-400 p-2 transition rounded hover:bg-slate-900 text-[10px]" title="Editar clasificación"><i class="fa-solid fa-pen"></i></button>
+              <button type="button" onclick="FlunaAdmin.deleteClassificationInline()" class="text-slate-500 hover:text-rose-400 p-2 transition rounded hover:bg-slate-900 text-[10px]" title="Eliminar clasificación"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          </div>
+          <p class="text-[10px] text-amber-400/80 mt-1.5 flex items-start gap-1.5">
+            <i class="fa-solid fa-circle-info mt-0.5"></i>
+            <span>La <strong>Clasificación</strong> agrupa productos dentro de una misma categoría y genera secciones separadas en el menú del home. Ej: dentro de "Pizzas" podés crear clasificaciones como "Clásicas", "Premium", "Veganas", etc. Si no asignás clasificación, el producto aparece sin agrupación especial.</span>
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <input type="checkbox" id="prodFormActive" checked class="accent-orange-500 w-4 h-4">
+          <label for="prodFormActive" class="font-bold text-slate-300">Producto Activo</label>
+        </div>
+
         <div>
           <label class="block font-bold text-slate-300 mb-1">Subir Imagen desde la PC (Supabase Storage)</label>
           <input type="file" id="prodFormImgFile" accept="image/*" class="w-full bg-slate-900 border border-white/10 rounded-xl p-2.5 text-white">
@@ -828,9 +871,14 @@
           <div id="recipeIngredientsContainer" class="space-y-2 max-h-[160px] overflow-y-auto">
             <!-- Filas dinámicas de ingredientes -->
           </div>
-          <button type="button" onclick="FlunaAdmin.addRecipeRow()" class="btn-fluna-outline py-1.5 px-3 text-[10px] font-bold flex items-center gap-1.5 mt-2">
-            <i class="fa-solid fa-plus"></i> Agregar Insumo a la Receta
-          </button>
+          <div class="flex gap-2">
+            <button type="button" onclick="FlunaAdmin.addRecipeRow()" class="btn-fluna-outline py-1.5 px-3 text-[10px] font-bold flex items-center gap-1.5">
+              <i class="fa-solid fa-plus"></i> Agregar Insumo a la Receta
+            </button>
+            <button type="button" onclick="FlunaAdmin.addIngredientInline()" class="bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 rounded-xl py-1.5 px-3 text-[10px] font-bold flex items-center gap-1.5 transition" title="Crear nuevo ingrediente al vuelo">
+              <i class="fa-solid fa-flask"></i> Nuevo Ingrediente
+            </button>
+          </div>
         </div>
 
         <button type="submit" class="w-full btn-fluna py-3 font-bold text-xs">Guardar Producto</button>

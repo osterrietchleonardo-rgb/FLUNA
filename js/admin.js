@@ -14,6 +14,9 @@ const FlunaAdmin = {
     purchases: [],
     finances: [],
     messages: [],
+    categories: [],
+    subcategories: [],
+    classifications: [],
     activeTab: 'dashboard',
     charts: {},
     activeChatCustomer: null,
@@ -283,12 +286,15 @@ const FlunaAdmin = {
   },
 
   async loadAllData() {
-    const [ordersRes, productsRes, ingredientsRes, financesRes, messagesRes] = await Promise.all([
+    const [ordersRes, productsRes, ingredientsRes, financesRes, messagesRes, categoriesRes, subcategoriesRes, classificationsRes] = await Promise.all([
       FlunaDB.getOrders(),
       FlunaDB.getProducts(),
       FlunaDB.getIngredients(),
       FlunaDB.getFinances(),
-      FlunaDB.getAllMessages()
+      FlunaDB.getAllMessages(),
+      FlunaDB.getCategories(),
+      FlunaDB.getSubcategories(),
+      FlunaDB.getClassifications()
     ]);
 
     if (ordersRes.data) this.state.orders = ordersRes.data;
@@ -296,6 +302,9 @@ const FlunaAdmin = {
     if (ingredientsRes.data) this.state.ingredients = ingredientsRes.data;
     if (financesRes.data) this.state.finances = financesRes.data;
     if (messagesRes.data) this.state.messages = messagesRes.data;
+    if (categoriesRes.data) this.state.categories = categoriesRes.data;
+    if (subcategoriesRes.data) this.state.subcategories = subcategoriesRes.data;
+    if (classificationsRes.data) this.state.classifications = classificationsRes.data;
 
     // Si la carga falla en silencio el panel muestra ceros como si fueran reales.
     const results = [ordersRes, productsRes, ingredientsRes, financesRes, messagesRes];
@@ -306,6 +315,7 @@ const FlunaAdmin = {
       console.warn('[FLuna] Algunas consultas del panel fallaron:', failed.map(r => r.error));
     }
 
+    this.populateDynamicSelects();
     this.renderKPIs();
     this.switchTab(this.state.activeTab);
   },
@@ -580,14 +590,26 @@ const FlunaAdmin = {
       return;
     }
 
+    const catValue = document.getElementById('prodFormCategory').value;
+    const customPrices = {};
+    if (catValue === 'Empanadas') {
+      const halfPrice = parseFloat(document.getElementById('prodFormPriceHalf').value);
+      const dozenPrice = parseFloat(document.getElementById('prodFormPriceDozen').value);
+      if (Number.isFinite(halfPrice) && halfPrice >= 0) customPrices.half_dozen = halfPrice;
+      if (Number.isFinite(dozenPrice) && dozenPrice >= 0) customPrices.dozen = dozenPrice;
+    }
+
     const productData = {
       name: document.getElementById('prodFormName').value.trim(),
-      category: document.getElementById('prodFormCategory').value,
+      category: catValue,
+      subcategory: document.getElementById('prodFormSubcategory')?.value || '',
+      classification: document.getElementById('prodFormClassification')?.value || '',
       price: price,
       available_stock: stock,
       image_url: imageUrl,
       description: document.getElementById('prodFormDesc').value.trim(),
-      is_active: document.getElementById('prodFormActive').checked
+      is_active: document.getElementById('prodFormActive').checked,
+      custom_prices: customPrices
     };
 
     if (!productData.name) {
@@ -645,11 +667,34 @@ const FlunaAdmin = {
     document.getElementById('prodFormId').value = prod.id;
     document.getElementById('prodFormName').value = prod.name;
     document.getElementById('prodFormCategory').value = prod.category;
+    this.populateSubcategorySelect(prod.category);
+    // Usar setTimeout para asegurar que el select de subcategoría ya se llenó
+    setTimeout(() => {
+      const subSelect = document.getElementById('prodFormSubcategory');
+      if (subSelect) subSelect.value = prod.subcategory || '';
+    }, 50);
     document.getElementById('prodFormPrice').value = prod.price;
     document.getElementById('prodFormStock').value = prod.available_stock;
     document.getElementById('prodFormImg').value = prod.image_url || '';
     document.getElementById('prodFormDesc').value = prod.description || '';
     document.getElementById('prodFormActive').checked = prod.is_active;
+    const classSelect = document.getElementById('prodFormClassification');
+    if (classSelect) classSelect.value = prod.classification || '';
+
+    // Logic for Empanadas pricing
+    const empanadasDiv = document.getElementById('empanadasPrices');
+    const labelPrice = document.getElementById('labelProdFormPrice');
+    if (prod.category === 'Empanadas') {
+      if (empanadasDiv) { empanadasDiv.classList.remove('hidden'); empanadasDiv.classList.add('grid'); }
+      if (labelPrice) labelPrice.innerText = 'Precio Unidad ($)';
+      document.getElementById('prodFormPriceHalf').value = prod.custom_prices?.half_dozen || '';
+      document.getElementById('prodFormPriceDozen').value = prod.custom_prices?.dozen || '';
+    } else {
+      if (empanadasDiv) { empanadasDiv.classList.add('hidden'); empanadasDiv.classList.remove('grid'); }
+      if (labelPrice) labelPrice.innerText = 'Precio ($)';
+      document.getElementById('prodFormPriceHalf').value = '';
+      document.getElementById('prodFormPriceDozen').value = '';
+    }
 
     // Cargar receta del producto
     const container = document.getElementById('recipeIngredientsContainer');
@@ -1553,6 +1598,345 @@ Listado de 8 a 10 hashtags optimizados para SEO y GEO en Argentina (ej: #FLunaPi
 
   removeRecipeRow(rowId) {
     document.getElementById(rowId)?.remove();
+  },
+
+  // --- SELECTS DINÁMICOS (CATEGORÍAS, SUBCATEGORÍAS, CLASIFICACIONES) ---
+
+  /** Llena todos los selects dinámicos con datos del state */
+  populateDynamicSelects() {
+    // 1) Select de categoría en formulario de producto
+    const prodCatSelect = document.getElementById('prodFormCategory');
+    if (prodCatSelect) {
+      const currentVal = prodCatSelect.value;
+      prodCatSelect.innerHTML = this.state.categories.map(cat =>
+        `<option value="${esc(cat.name)}">${esc(cat.emoji ? cat.emoji + ' ' : '')}${esc(cat.name)}</option>`
+      ).join('');
+      if (currentVal) prodCatSelect.value = currentVal;
+
+      // Listener para actualizar subcategorías y UI al cambiar categoría
+      prodCatSelect.onchange = () => {
+        const selectedCat = prodCatSelect.value;
+        this.populateSubcategorySelect(selectedCat);
+
+        const empanadasDiv = document.getElementById('empanadasPrices');
+        const labelPrice = document.getElementById('labelProdFormPrice');
+        if (selectedCat === 'Empanadas') {
+          if (empanadasDiv) { empanadasDiv.classList.remove('hidden'); empanadasDiv.classList.add('grid'); }
+          if (labelPrice) labelPrice.innerText = 'Precio Unidad ($)';
+        } else {
+          if (empanadasDiv) { empanadasDiv.classList.add('hidden'); empanadasDiv.classList.remove('grid'); }
+          if (labelPrice) labelPrice.innerText = 'Precio ($)';
+        }
+      };
+    }
+
+    // 2) Select de filtro de categoría en tabla de productos
+    const filterSelect = document.getElementById('adminProdCatFilter');
+    if (filterSelect) {
+      const activeCategories = this.state.categories.filter(cat => 
+        this.state.products.some(p => p.category === cat.name)
+      );
+      const currentFilter = filterSelect.value;
+      filterSelect.innerHTML = '<option value="Todas">Todas las categorías</option>' +
+        activeCategories.map(cat =>
+          `<option value="${esc(cat.name)}">${esc(cat.emoji ? cat.emoji + ' ' : '')}${esc(cat.name)}</option>`
+        ).join('');
+      if (currentFilter) filterSelect.value = currentFilter;
+    }
+
+    // 3) Select de clasificación
+    const classSelect = document.getElementById('prodFormClassification');
+    if (classSelect) {
+      const currentClass = classSelect.value;
+      classSelect.innerHTML = '<option value="">— Sin clasificación —</option>' +
+        this.state.classifications.map(cl =>
+          `<option value="${esc(cl.name)}">${esc(cl.name)}</option>`
+        ).join('');
+      if (currentClass) classSelect.value = currentClass;
+    }
+
+    // 4) Subcategorías para la categoría actual
+    const currentCat = prodCatSelect?.value;
+    if (currentCat) this.populateSubcategorySelect(currentCat);
+  },
+
+  /** Llena el select de subcategoría filtrado por la categoría elegida */
+  populateSubcategorySelect(categoryName) {
+    const subSelect = document.getElementById('prodFormSubcategory');
+    if (!subSelect) return;
+
+    const cat = this.state.categories.find(c => c.name === categoryName);
+    const filtered = cat
+      ? this.state.subcategories.filter(s => s.category_id === cat.id)
+      : [];
+
+    subSelect.innerHTML = '<option value="">— Sin subcategoría —</option>' +
+      filtered.map(sub =>
+        `<option value="${esc(sub.name)}">${esc(sub.name)}</option>`
+      ).join('');
+  },
+
+  // --- CREAR / EDITAR / ELIMINAR CATEGORÍA AL VUELO ---
+  async addCategoryInline() {
+    const name = prompt('Nombre de la nueva categoría:');
+    if (!name || !name.trim()) return;
+
+    const icon = prompt('Icono Font Awesome (ej: fa-pizza-slice). Dejá vacío para usar "fa-tag":', 'fa-tag') || 'fa-tag';
+    const emoji = prompt('Emoji de la categoría (ej: 🍕). Dejá vacío si no querés:', '') || '';
+
+    const maxOrder = this.state.categories.reduce((max, c) => Math.max(max, c.display_order || 0), 0);
+    const res = await FlunaDB.createCategory({ name: name.trim(), icon, emoji, display_order: maxOrder + 1 });
+
+    if (res.error) {
+      alert('No se pudo crear la categoría: ' + FlunaUtils.errorMessage(res.error));
+      return;
+    }
+
+    // Recargar solo categorías y repoblar selects
+    const { data } = await FlunaDB.getCategories();
+    if (data) this.state.categories = data;
+    this.populateDynamicSelects();
+    document.getElementById('prodFormCategory').value = name.trim();
+    this.populateSubcategorySelect(name.trim());
+  },
+
+  async editCategoryInline() {
+    const select = document.getElementById('prodFormCategory');
+    const currentName = select?.value;
+    if (!currentName) return;
+
+    const cat = this.state.categories.find(c => c.name === currentName);
+    if (!cat) { alert('Categoría no encontrada.'); return; }
+
+    const newName = prompt(`Editar nombre de "${currentName}":`, currentName);
+    if (!newName || !newName.trim() || newName.trim() === currentName) return;
+
+    // Actualizar la categoría
+    const res = await FlunaDB.updateCategory(cat.id, { name: newName.trim() });
+    if (res.error) {
+      alert('No se pudo editar la categoría: ' + FlunaUtils.errorMessage(res.error));
+      return;
+    }
+
+    // Actualizar productos que usen esta categoría
+    const client = getSupabaseClient();
+    if (client) {
+      await client.from('products').update({ category: newName.trim() }).eq('category', currentName);
+    }
+
+    this.loadAllData();
+  },
+
+  async deleteCategoryInline() {
+    const select = document.getElementById('prodFormCategory');
+    const currentName = select?.value;
+    if (!currentName) return;
+
+    const cat = this.state.categories.find(c => c.name === currentName);
+    if (!cat) return;
+
+    const productsInCat = this.state.products.filter(p => p.category === currentName);
+    if (productsInCat.length > 0) {
+      alert(`No se puede eliminar "${currentName}": tiene ${productsInCat.length} producto(s) asignado(s). Reasignalos primero.`);
+      return;
+    }
+
+    if (!confirm(`¿Eliminar la categoría "${currentName}"? Esta acción no se puede deshacer.`)) return;
+
+    const res = await FlunaDB.deleteCategory(cat.id);
+    if (res.error) {
+      alert('No se pudo eliminar: ' + FlunaUtils.errorMessage(res.error));
+      return;
+    }
+
+    const { data } = await FlunaDB.getCategories();
+    if (data) this.state.categories = data;
+    this.populateDynamicSelects();
+  },
+
+  // --- CREAR / ELIMINAR SUBCATEGORÍA AL VUELO ---
+  async addSubcategoryInline() {
+    const catName = document.getElementById('prodFormCategory')?.value;
+    if (!catName) { alert('Seleccioná una categoría primero.'); return; }
+
+    const cat = this.state.categories.find(c => c.name === catName);
+    if (!cat) { alert('Categoría no encontrada en la base.'); return; }
+
+    const name = prompt(`Nueva subcategoría para "${catName}":`);
+    if (!name || !name.trim()) return;
+
+    const res = await FlunaDB.createSubcategory({ category_id: cat.id, name: name.trim() });
+    if (res.error) {
+      alert('No se pudo crear la subcategoría: ' + FlunaUtils.errorMessage(res.error));
+      return;
+    }
+
+    const { data } = await FlunaDB.getSubcategories();
+    if (data) this.state.subcategories = data;
+    this.populateSubcategorySelect(catName);
+    document.getElementById('prodFormSubcategory').value = name.trim();
+  },
+
+  async editSubcategoryInline() {
+    const subSelect = document.getElementById('prodFormSubcategory');
+    const subName = subSelect?.value;
+    if (!subName) { alert('Seleccioná una subcategoría primero.'); return; }
+
+    const catName = document.getElementById('prodFormCategory')?.value;
+    const cat = this.state.categories.find(c => c.name === catName);
+    const sub = this.state.subcategories.find(s => s.name === subName && s.category_id === cat?.id);
+    if (!sub) { alert('Subcategoría no encontrada.'); return; }
+
+    const newName = prompt(`Editar nombre de "${subName}":`, subName);
+    if (!newName || !newName.trim() || newName.trim() === subName) return;
+
+    const res = await FlunaDB.updateSubcategory(sub.id, { name: newName.trim() });
+    if (res.error) {
+      alert('No se pudo editar: ' + FlunaUtils.errorMessage(res.error));
+      return;
+    }
+
+    // Actualizar productos que usen esta subcategoría
+    const client = getSupabaseClient();
+    if (client) {
+      await client.from('products')
+        .update({ subcategory: newName.trim() })
+        .eq('category', catName)
+        .eq('subcategory', subName);
+    }
+
+    this.loadAllData();
+  },
+
+  async deleteSubcategoryInline() {
+    const subSelect = document.getElementById('prodFormSubcategory');
+    const subName = subSelect?.value;
+    if (!subName) { alert('Seleccioná una subcategoría primero.'); return; }
+
+    const catName = document.getElementById('prodFormCategory')?.value;
+    const cat = this.state.categories.find(c => c.name === catName);
+    const sub = this.state.subcategories.find(s => s.name === subName && s.category_id === cat?.id);
+    if (!sub) { alert('Subcategoría no encontrada.'); return; }
+
+    if (!confirm(`¿Eliminar la subcategoría "${subName}"?`)) return;
+
+    const res = await FlunaDB.deleteSubcategory(sub.id);
+    if (res.error) {
+      alert('No se pudo eliminar: ' + FlunaUtils.errorMessage(res.error));
+      return;
+    }
+
+    const { data } = await FlunaDB.getSubcategories();
+    if (data) this.state.subcategories = data;
+    this.populateSubcategorySelect(catName);
+  },
+
+  // --- CREAR / EDITAR / ELIMINAR CLASIFICACIÓN AL VUELO ---
+  async addClassificationInline() {
+    const name = prompt('Nombre de la nueva clasificación (ej: "Clásicas", "Premium", "Veganas"):');
+    if (!name || !name.trim()) return;
+
+    const desc = prompt('Descripción breve (opcional):', '') || '';
+    const maxOrder = this.state.classifications.reduce((max, c) => Math.max(max, c.display_order || 0), 0);
+
+    const res = await FlunaDB.createClassification({ name: name.trim(), description: desc, display_order: maxOrder + 1 });
+    if (res.error) {
+      alert('No se pudo crear la clasificación: ' + FlunaUtils.errorMessage(res.error));
+      return;
+    }
+
+    const { data } = await FlunaDB.getClassifications();
+    if (data) this.state.classifications = data;
+    this.populateDynamicSelects();
+    document.getElementById('prodFormClassification').value = name.trim();
+  },
+
+  async editClassificationInline() {
+    const select = document.getElementById('prodFormClassification');
+    const currentName = select?.value;
+    if (!currentName) { alert('Seleccioná una clasificación primero.'); return; }
+
+    const cl = this.state.classifications.find(c => c.name === currentName);
+    if (!cl) { alert('Clasificación no encontrada.'); return; }
+
+    const newName = prompt(`Editar nombre de "${currentName}":`, currentName);
+    if (!newName || !newName.trim() || newName.trim() === currentName) return;
+
+    const res = await FlunaDB.updateClassification(cl.id, { name: newName.trim() });
+    if (res.error) {
+      alert('No se pudo editar: ' + FlunaUtils.errorMessage(res.error));
+      return;
+    }
+
+    // Actualizar productos que usen esta clasificación
+    const client = getSupabaseClient();
+    if (client) {
+      await client.from('products').update({ classification: newName.trim() }).eq('classification', currentName);
+    }
+
+    this.loadAllData();
+  },
+
+  async deleteClassificationInline() {
+    const select = document.getElementById('prodFormClassification');
+    const currentName = select?.value;
+    if (!currentName) { alert('Seleccioná una clasificación primero.'); return; }
+
+    const cl = this.state.classifications.find(c => c.name === currentName);
+    if (!cl) return;
+
+    if (!confirm(`¿Eliminar la clasificación "${currentName}"? Los productos que la usen quedarán sin clasificación.`)) return;
+
+    const res = await FlunaDB.deleteClassification(cl.id);
+    if (res.error) {
+      alert('No se pudo eliminar: ' + FlunaUtils.errorMessage(res.error));
+      return;
+    }
+
+    // Limpiar clasificación de productos que la usaban
+    const client = getSupabaseClient();
+    if (client) {
+      await client.from('products').update({ classification: '' }).eq('classification', currentName);
+    }
+
+    this.loadAllData();
+  },
+
+  // --- CREAR INGREDIENTE AL VUELO (DESDE LA RECETA DE PRODUCTO) ---
+  async addIngredientInline() {
+    const name = prompt('Nombre del nuevo ingrediente:');
+    if (!name || !name.trim()) return;
+
+    const unit = prompt('Unidad de medida (kg, g, u, litros):', 'kg') || 'kg';
+
+    const res = await FlunaDB.createIngredient({
+      name: name.trim(),
+      unit: unit,
+      current_stock: 0,
+      min_stock_alert: 5,
+      cost_per_unit: 0
+    });
+
+    if (res.error) {
+      alert('No se pudo crear el ingrediente: ' + FlunaUtils.errorMessage(res.error));
+      return;
+    }
+
+    // Recargar ingredientes y actualizar los selects de receta abiertos
+    const { data } = await FlunaDB.getIngredients();
+    if (data) this.state.ingredients = data;
+
+    // Actualizar todos los selects de receta existentes
+    document.querySelectorAll('.recipe-ing-select').forEach(select => {
+      const currentVal = select.value;
+      const options = '<option value="">-- Seleccionar --</option>' +
+        this.state.ingredients.map(ing =>
+          `<option value="${esc(ing.id)}" ${ing.id === currentVal ? 'selected' : ''}>${esc(ing.name)} (${esc(ing.unit)})</option>`
+        ).join('');
+      select.innerHTML = options;
+    });
+
+    alert(`Ingrediente "${name.trim()}" creado. Ya está disponible en los desplegables de receta.`);
   },
 
   // --- SOLAPAS DE SECCIÓN FINANZAS ---

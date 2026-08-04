@@ -405,6 +405,81 @@ const FlunaDB = {
     return await client.from('ingredients').delete().eq('id', id);
   },
 
+  // --- CATEGORÍAS DINÁMICAS ---
+  async getCategories() {
+    const client = getSupabaseClient();
+    if (!client) return noClient([]);
+    return await client.from('categories').select('*').order('display_order', { ascending: true });
+  },
+
+  async createCategory(catData) {
+    const client = getSupabaseClient();
+    if (!client) return noClient();
+    return await client.from('categories').insert([catData]).select();
+  },
+
+  async updateCategory(id, catData) {
+    const client = getSupabaseClient();
+    if (!client) return noClient();
+    return await client.from('categories').update(catData).eq('id', id).select();
+  },
+
+  async deleteCategory(id) {
+    const client = getSupabaseClient();
+    if (!client) return noClient();
+    return await client.from('categories').delete().eq('id', id);
+  },
+
+  // --- SUBCATEGORÍAS DINÁMICAS ---
+  async getSubcategories() {
+    const client = getSupabaseClient();
+    if (!client) return noClient([]);
+    return await client.from('subcategories').select('*, categories(name)').order('name', { ascending: true });
+  },
+
+  async createSubcategory(subData) {
+    const client = getSupabaseClient();
+    if (!client) return noClient();
+    return await client.from('subcategories').insert([subData]).select();
+  },
+
+  async updateSubcategory(id, subData) {
+    const client = getSupabaseClient();
+    if (!client) return noClient();
+    return await client.from('subcategories').update(subData).eq('id', id).select();
+  },
+
+  async deleteSubcategory(id) {
+    const client = getSupabaseClient();
+    if (!client) return noClient();
+    return await client.from('subcategories').delete().eq('id', id);
+  },
+
+  // --- CLASIFICACIONES DINÁMICAS ---
+  async getClassifications() {
+    const client = getSupabaseClient();
+    if (!client) return noClient([]);
+    return await client.from('classifications').select('*').order('display_order', { ascending: true });
+  },
+
+  async createClassification(classData) {
+    const client = getSupabaseClient();
+    if (!client) return noClient();
+    return await client.from('classifications').insert([classData]).select();
+  },
+
+  async updateClassification(id, classData) {
+    const client = getSupabaseClient();
+    if (!client) return noClient();
+    return await client.from('classifications').update(classData).eq('id', id).select();
+  },
+
+  async deleteClassification(id) {
+    const client = getSupabaseClient();
+    if (!client) return noClient();
+    return await client.from('classifications').delete().eq('id', id);
+  },
+
   // --- RECETAS DE PRODUCTOS ---
   async getProductRecipe(productId) {
     const client = getSupabaseClient();

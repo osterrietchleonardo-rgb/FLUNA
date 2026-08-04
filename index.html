@@ -226,29 +226,12 @@
       </div>
     </section>
 
-    <!-- Categories Filter Bar -->
-    <section class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+    <!-- Categories Filter Bar (Dinámica — se llena desde app.js) -->
+    <section id="categoryFilterBar" class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
       <button data-category="Todas" class="cat-btn bg-orange-500 text-white shadow-lg py-2 px-5 rounded-xl text-xs font-bold whitespace-nowrap transition">
         <i class="fa-solid fa-border-all mr-1.5"></i> Todas
       </button>
-      <button data-category="Pizzas" class="cat-btn bg-slate-900/60 text-slate-300 py-2 px-5 rounded-xl text-xs font-bold whitespace-nowrap hover:text-white transition">
-        <i class="fa-solid fa-pizza-slice mr-1.5 text-orange-400"></i> Pizzas
-      </button>
-      <button data-category="Empanadas" class="cat-btn bg-slate-900/60 text-slate-300 py-2 px-5 rounded-xl text-xs font-bold whitespace-nowrap hover:text-white transition">
-        <i class="fa-solid fa-cloud mr-1.5 text-amber-400"></i> Empanadas
-      </button>
-      <button data-category="Bebidas" class="cat-btn bg-slate-900/60 text-slate-300 py-2 px-5 rounded-xl text-xs font-bold whitespace-nowrap hover:text-white transition">
-        <i class="fa-solid fa-wine-bottle mr-1.5 text-sky-400"></i> Bebidas
-      </button>
-      <button data-category="Postres" class="cat-btn bg-slate-900/60 text-slate-300 py-2 px-5 rounded-xl text-xs font-bold whitespace-nowrap hover:text-white transition">
-        <i class="fa-solid fa-ice-cream mr-1.5 text-pink-400"></i> Postres
-      </button>
-      <button data-category="Combos" class="cat-btn bg-slate-900/60 text-slate-300 py-2 px-5 rounded-xl text-xs font-bold whitespace-nowrap hover:text-white transition border border-transparent hover:border-amber-500/30 hover:bg-amber-500/10 hover:text-amber-400">
-        <i class="fa-solid fa-bolt mr-1.5 text-amber-400"></i> Combos
-      </button>
-      <button data-category="Ofertas" class="cat-btn bg-slate-900/60 text-slate-300 py-2 px-5 rounded-xl text-xs font-bold whitespace-nowrap hover:text-white transition border border-transparent hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-400">
-        <i class="fa-solid fa-fire-flame-curved mr-1.5 text-rose-400"></i> Ofertas
-      </button>
+      <!-- Resto de botones generados dinámicamente por app.js -->
     </section>
 
     <!-- Product Catalog Grid -->
@@ -278,17 +261,10 @@
         </div>
 
         <!-- Opción Tamaño -->
-        <div class="space-y-2 pt-2 border-t border-white/10">
-          <label class="text-xs font-bold text-slate-300 uppercase tracking-wider block">Tamaño</label>
-          <div class="grid grid-cols-2 gap-2">
-            <label class="glass-card p-3 flex items-center gap-2 cursor-pointer text-xs font-medium hover:border-orange-500">
-              <input type="radio" name="prodSize" value="Mediana" checked class="accent-orange-500">
-              <span>Mediana (6 Porciones)</span>
-            </label>
-            <label class="glass-card p-3 flex items-center gap-2 cursor-pointer text-xs font-medium hover:border-orange-500">
-              <input type="radio" name="prodSize" value="Familiar (8 Porciones)" class="accent-orange-500">
-              <span>Familiar (+$2.500)</span>
-            </label>
+        <div class="space-y-2 pt-2 border-t border-white/10" id="modalSizeSection">
+          <label class="text-xs font-bold text-slate-300 uppercase tracking-wider block" id="modalSizeLabel">Tamaño</label>
+          <div class="grid grid-cols-2 gap-2" id="modalSizeGrid">
+            <!-- Dynamic sizes -->
           </div>
         </div>
 

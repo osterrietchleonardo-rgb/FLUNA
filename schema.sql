@@ -6,17 +6,54 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ------------------------------------------------------------
--- 1. TABLA DE PRODUCTOS
+-- 1. TABLAS DE MENÚ DINÁMICO (CATEGORÍAS, SUBCATEGORÍAS, CLASIFICACIONES)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.categories (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL UNIQUE,
+    icon TEXT DEFAULT 'fa-tag',
+    emoji TEXT DEFAULT '',
+    display_order INT DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_categories_order ON public.categories(display_order ASC);
+
+CREATE TABLE IF NOT EXISTS public.subcategories (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    category_id UUID NOT NULL REFERENCES public.categories(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(category_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_subcategories_category ON public.subcategories(category_id);
+
+CREATE TABLE IF NOT EXISTS public.classifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL UNIQUE,
+    description TEXT DEFAULT '',
+    display_order INT DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_classifications_order ON public.classifications(display_order ASC);
+
+-- ------------------------------------------------------------
+-- 1B. TABLA DE PRODUCTOS
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.products (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name TEXT NOT NULL,
     description TEXT,
     price NUMERIC(10, 2) NOT NULL CHECK (price >= 0),
-    category TEXT NOT NULL DEFAULT 'Pizzas', -- 'Pizzas', 'Empanadas', 'Bebidas', 'Postres', 'Combos'
+    category TEXT NOT NULL DEFAULT 'Pizzas',
+    subcategory TEXT DEFAULT '',
+    classification TEXT DEFAULT '',
     image_url TEXT,
     available_stock INT NOT NULL DEFAULT 50 CHECK (available_stock >= 0),
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    custom_prices JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -175,6 +212,9 @@ CREATE INDEX IF NOT EXISTS idx_product_recipes_product ON public.product_recipes
 -- anónima que el sitio público.
 -- Para cerrarlo de verdad, ver `schema_hardening.sql`.
 -- ------------------------------------------------------------
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.subcategories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.classifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
@@ -185,6 +225,12 @@ ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.product_recipes ENABLE ROW LEVEL SECURITY;
 
 -- Se recrean para que este archivo sea re-ejecutable sin errores.
+DROP POLICY IF EXISTS "Public Categories Read" ON public.categories;
+DROP POLICY IF EXISTS "Admin Categories Write" ON public.categories;
+DROP POLICY IF EXISTS "Public Subcategories Read" ON public.subcategories;
+DROP POLICY IF EXISTS "Admin Subcategories Write" ON public.subcategories;
+DROP POLICY IF EXISTS "Public Classifications Read" ON public.classifications;
+DROP POLICY IF EXISTS "Admin Classifications Write" ON public.classifications;
 DROP POLICY IF EXISTS "Public Products Read" ON public.products;
 DROP POLICY IF EXISTS "Public Products Insert" ON public.products;
 DROP POLICY IF EXISTS "Public Products Update" ON public.products;
@@ -196,6 +242,14 @@ DROP POLICY IF EXISTS "Public Purchases All" ON public.purchases;
 DROP POLICY IF EXISTS "Public Finances All" ON public.finances;
 DROP POLICY IF EXISTS "Public Messages All" ON public.messages;
 DROP POLICY IF EXISTS "Public Product Recipes All" ON public.product_recipes;
+
+-- Políticas de lectura pública para menú dinámico
+CREATE POLICY "Public Categories Read" ON public.categories FOR SELECT USING (true);
+CREATE POLICY "Admin Categories Write" ON public.categories FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Subcategories Read" ON public.subcategories FOR SELECT USING (true);
+CREATE POLICY "Admin Subcategories Write" ON public.subcategories FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Classifications Read" ON public.classifications FOR SELECT USING (true);
+CREATE POLICY "Admin Classifications Write" ON public.classifications FOR ALL USING (true) WITH CHECK (true);
 
 -- Políticas de lectura pública para Productos
 CREATE POLICY "Public Products Read" ON public.products FOR SELECT USING (true);
@@ -232,6 +286,20 @@ END $$;
 -- ------------------------------------------------------------
 -- DATOS SEMILLA (SEED DATA)
 -- ------------------------------------------------------------
+
+-- Categorías iniciales
+INSERT INTO public.categories (name, icon, emoji, display_order) VALUES
+('Pizzas', 'fa-pizza-slice', '🍕', 1),
+('Empanadas', 'fa-cloud', '🥟', 2),
+('Sándwiches de Miga', 'fa-bread-slice', '🥪', 3),
+('Sándwiches Calientes', 'fa-hotdog', '🥖', 4),
+('Minutas y Porciones', 'fa-utensils', '🍽️', 5),
+('Tartas', 'fa-chart-pie', '🥧', 6),
+('Bebidas', 'fa-wine-bottle', '🍷', 7),
+('Postres', 'fa-ice-cream', '🍨', 8),
+('Combos', 'fa-bolt', '⚡', 9),
+('Ofertas', 'fa-fire-flame-curved', '🔥', 10)
+ON CONFLICT (name) DO NOTHING;
 
 -- Productos iniciales de FLuna
 INSERT INTO public.products (name, description, price, category, image_url, available_stock) VALUES

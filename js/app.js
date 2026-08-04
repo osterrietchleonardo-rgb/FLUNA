@@ -10,7 +10,7 @@ const FlunaApp = {
   // Estado local de la aplicación cliente
   state: {
     products: [],
-    categories: ['Todas', 'Pizzas', 'Empanadas', 'Bebidas', 'Postres', 'Combos'],
+    categories: [],
     selectedCategory: 'Todas',
     cart: [],
     selectedProductForModal: null,
@@ -89,20 +89,8 @@ const FlunaApp = {
   },
 
   bindEvents() {
-    // Categorías
-    document.querySelectorAll('.cat-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        document.querySelectorAll('.cat-btn').forEach(b => {
-          b.classList.remove('bg-orange-500', 'text-white', 'shadow-lg');
-          b.classList.add('bg-slate-900/60', 'text-slate-300');
-        });
-        e.currentTarget.classList.remove('bg-slate-900/60', 'text-slate-300');
-        e.currentTarget.classList.add('bg-orange-500', 'text-white', 'shadow-lg');
-
-        this.state.selectedCategory = e.currentTarget.dataset.category;
-        this.renderCatalog();
-      });
-    });
+    // Categorías — se bindean después del renderizado dinámico
+    // (ver renderCategoryFilterBar)
 
     // Carrito Drawer Toggle
     const cartBtn = document.getElementById('cartBtn');
@@ -272,9 +260,12 @@ const FlunaApp = {
       </div>
     `;
 
-    const { data, error } = await FlunaDB.getProducts();
+    const [productsRes, categoriesRes] = await Promise.all([
+      FlunaDB.getProducts(),
+      FlunaDB.getCategories()
+    ]);
 
-    if (error || !data) {
+    if (productsRes.error || !productsRes.data) {
       catalogContainer.innerHTML = `
         <div class="col-span-full text-center py-16 text-rose-400">
           <i class="fa-solid fa-triangle-exclamation text-3xl mb-2"></i>
@@ -284,8 +275,75 @@ const FlunaApp = {
       return;
     }
 
-    this.state.products = data;
+    this.state.products = productsRes.data;
+    if (categoriesRes.data) this.state.categories = categoriesRes.data;
+    this.renderCategoryFilterBar();
     this.renderCatalog();
+  },
+
+  /** Genera los botones de categoría dinámicamente desde la BD */
+  renderCategoryFilterBar() {
+    const bar = document.getElementById('categoryFilterBar');
+    if (!bar) return;
+
+    // Colores especiales para ciertas categorías
+    const specialStyles = {
+      'Combos': 'border border-transparent hover:border-amber-500/30 hover:bg-amber-500/10 hover:text-amber-400',
+      'Ofertas': 'border border-transparent hover:border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-400'
+    };
+
+    // Color de icono por categoría (puede extenderse)
+    const iconColors = {
+      'Pizzas': 'text-orange-400',
+      'Empanadas': 'text-amber-400',
+      'Bebidas': 'text-sky-400',
+      'Postres': 'text-pink-400',
+      'Combos': 'text-amber-400',
+      'Ofertas': 'text-rose-400',
+      'Sándwiches de Miga': 'text-yellow-400',
+      'Sándwiches Calientes': 'text-orange-400',
+      'Minutas y Porciones': 'text-emerald-400',
+      'Tartas': 'text-purple-400'
+    };
+
+    const allBtn = `<button data-category="Todas" class="cat-btn ${this.state.selectedCategory === 'Todas' ? 'bg-orange-500 text-white shadow-lg' : 'bg-slate-900/60 text-slate-300'} py-2 px-5 rounded-xl text-xs font-bold whitespace-nowrap transition">
+      <i class="fa-solid fa-border-all mr-1.5"></i> Todas
+    </button>`;
+
+    // Solo mostrar categorías que tengan al menos un producto activo
+    const activeCategories = this.state.categories.filter(cat => 
+      this.state.products.some(p => p.category === cat.name && p.is_active)
+    );
+
+    const catBtns = activeCategories.map(cat => {
+      const isActive = this.state.selectedCategory === cat.name;
+      const activeClasses = isActive ? 'bg-orange-500 text-white shadow-lg' : 'bg-slate-900/60 text-slate-300 hover:text-white';
+      const extra = specialStyles[cat.name] || '';
+      const iconColor = iconColors[cat.name] || 'text-orange-400';
+      const icon = cat.icon || 'fa-tag';
+      const emoji = cat.emoji || '';
+
+      return `<button data-category="${esc(cat.name)}" class="cat-btn ${activeClasses} py-2 px-5 rounded-xl text-xs font-bold whitespace-nowrap transition ${extra}">
+        <i class="fa-solid ${esc(icon)} mr-1.5 ${iconColor}"></i> ${emoji ? esc(emoji) + ' ' : ''}${esc(cat.name)}
+      </button>`;
+    }).join('');
+
+    bar.innerHTML = allBtn + catBtns;
+
+    // Re-bindear eventos de click
+    bar.querySelectorAll('.cat-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        bar.querySelectorAll('.cat-btn').forEach(b => {
+          b.classList.remove('bg-orange-500', 'text-white', 'shadow-lg');
+          b.classList.add('bg-slate-900/60', 'text-slate-300');
+        });
+        e.currentTarget.classList.remove('bg-slate-900/60', 'text-slate-300');
+        e.currentTarget.classList.add('bg-orange-500', 'text-white', 'shadow-lg');
+
+        this.state.selectedCategory = e.currentTarget.dataset.category;
+        this.renderCatalog();
+      });
+    });
   },
 
   renderCatalog() {
@@ -306,7 +364,20 @@ const FlunaApp = {
       return;
     }
 
-    catalogContainer.innerHTML = filtered.map(product => `
+    // Agrupar por clasificación
+    const groups = {};
+    const noClassification = [];
+    filtered.forEach(product => {
+      const cl = (product.classification || '').trim();
+      if (cl) {
+        if (!groups[cl]) groups[cl] = [];
+        groups[cl].push(product);
+      } else {
+        noClassification.push(product);
+      }
+    });
+
+    const renderProductCard = (product) => `
       <div class="glass-card overflow-hidden flex flex-col justify-between group">
         <div class="relative overflow-hidden h-48 bg-slate-900">
           <img src="${FlunaUtils.safeImageUrl(product.image_url)}"
@@ -319,8 +390,13 @@ const FlunaApp = {
           }">
             ${product.category === 'Combos' ? '⚡ COMBO PROMO' : product.category === 'Ofertas' ? '🔥 OFERTA' : esc(product.category)}
           </div>
+          ${product.subcategory ? `
+            <div class="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full text-[10px] font-mono text-slate-300 border border-white/10">
+              ${esc(product.subcategory)}
+            </div>
+          ` : ''}
           ${product.available_stock <= 5 ? `
-            <div class="absolute top-3 right-3 bg-rose-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+            <div class="absolute ${product.subcategory ? 'top-10' : 'top-3'} right-3 bg-rose-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
               ¡Últimas ${product.available_stock} unidades!
             </div>
           ` : ''}
@@ -334,8 +410,16 @@ const FlunaApp = {
 
           <div class="flex items-center justify-between pt-2 border-t border-white/5">
             <div>
-              <span class="text-xs text-slate-500 font-mono block">Precio</span>
-              <span class="text-xl font-extrabold font-mono text-white">${FlunaUtils.formatARS(product.price)}</span>
+              ${product.category === 'Empanadas' && product.custom_prices && (product.custom_prices.half_dozen || product.custom_prices.dozen) ? `
+                <div class="text-[10px] text-slate-400 font-mono flex flex-col gap-0.5">
+                  <span class="text-white"><span class="text-slate-500">1u:</span> ${FlunaUtils.formatARS(product.price)}</span>
+                  ${product.custom_prices.half_dozen ? `<span><span class="text-slate-500">6u:</span> ${FlunaUtils.formatARS(product.custom_prices.half_dozen)}</span>` : ''}
+                  ${product.custom_prices.dozen ? `<span><span class="text-slate-500">12u:</span> ${FlunaUtils.formatARS(product.custom_prices.dozen)}</span>` : ''}
+                </div>
+              ` : `
+                <span class="text-xs text-slate-500 font-mono block">Precio</span>
+                <span class="text-xl font-extrabold font-mono text-white">${FlunaUtils.formatARS(product.price)}</span>
+              `}
             </div>
 
             <button onclick="FlunaApp.openProductModal('${esc(product.id)}')"
@@ -345,7 +429,46 @@ const FlunaApp = {
           </div>
         </div>
       </div>
-    `).join('');
+    `;
+
+    let html = '';
+
+    // Renderizar clasificaciones con cabeceras
+    const classificationNames = Object.keys(groups);
+    classificationNames.forEach(clName => {
+      html += `
+        <div class="col-span-full mt-6 mb-2">
+          <div class="flex items-center gap-3">
+            <div class="h-px flex-1 bg-gradient-to-r from-orange-500/40 to-transparent"></div>
+            <h3 class="text-sm font-black text-orange-400 uppercase tracking-widest font-mono flex items-center gap-2">
+              <i class="fa-solid fa-layer-group text-orange-500/60"></i> ${esc(clName)}
+            </h3>
+            <div class="h-px flex-1 bg-gradient-to-l from-orange-500/40 to-transparent"></div>
+          </div>
+        </div>
+      `;
+      html += groups[clName].map(renderProductCard).join('');
+    });
+
+    // Productos sin clasificación
+    if (noClassification.length > 0) {
+      if (classificationNames.length > 0) {
+        html += `
+          <div class="col-span-full mt-6 mb-2">
+            <div class="flex items-center gap-3">
+              <div class="h-px flex-1 bg-gradient-to-r from-slate-500/30 to-transparent"></div>
+              <h3 class="text-sm font-black text-slate-400 uppercase tracking-widest font-mono">
+                Otros
+              </h3>
+              <div class="h-px flex-1 bg-gradient-to-l from-slate-500/30 to-transparent"></div>
+            </div>
+          </div>
+        `;
+      }
+      html += noClassification.map(renderProductCard).join('');
+    }
+
+    catalogContainer.innerHTML = html;
   },
 
   openProductModal(productId) {
@@ -365,8 +488,59 @@ const FlunaApp = {
     const modal = document.getElementById('productModal');
     document.getElementById('modalProdTitle').innerText = product.name;
     document.getElementById('modalProdDesc').innerText = product.description || '';
-    document.getElementById('modalProdPrice').innerText = '$' + Number(product.price).toLocaleString('es-AR');
+    document.getElementById('modalProdPrice').innerText = product.category === 'Empanadas' ? 'Desde $' + Number(product.price).toLocaleString('es-AR') : '$' + Number(product.price).toLocaleString('es-AR');
     document.getElementById('modalProdImg').src = FlunaUtils.safeImageUrl(product.image_url);
+
+    // Dynamic sizes
+    const sizeSection = document.getElementById('modalSizeSection');
+    const sizeGrid = document.getElementById('modalSizeGrid');
+    const sizeLabel = document.getElementById('modalSizeLabel');
+    
+    if (product.category === 'Empanadas') {
+      sizeSection.classList.remove('hidden');
+      sizeLabel.innerText = 'Cantidad';
+      let html = `
+        <label class="glass-card p-3 flex items-center gap-2 cursor-pointer text-xs font-medium hover:border-orange-500">
+          <input type="radio" name="prodSize" value="Unidad" data-price="${product.price}" checked class="accent-orange-500">
+          <span>Unidad (${FlunaUtils.formatARS(product.price)})</span>
+        </label>
+      `;
+      if (product.custom_prices?.half_dozen) {
+        html += `
+          <label class="glass-card p-3 flex items-center gap-2 cursor-pointer text-xs font-medium hover:border-orange-500">
+            <input type="radio" name="prodSize" value="Media Docena" data-price="${product.custom_prices.half_dozen}" class="accent-orange-500">
+            <span>6 Unidades (${FlunaUtils.formatARS(product.custom_prices.half_dozen)})</span>
+          </label>
+        `;
+      }
+      if (product.custom_prices?.dozen) {
+        html += `
+          <label class="glass-card p-3 flex items-center gap-2 cursor-pointer text-xs font-medium hover:border-orange-500">
+            <input type="radio" name="prodSize" value="Docena" data-price="${product.custom_prices.dozen}" class="accent-orange-500">
+            <span>12 Unidades (${FlunaUtils.formatARS(product.custom_prices.dozen)})</span>
+          </label>
+        `;
+      }
+      sizeGrid.innerHTML = html;
+      sizeGrid.className = 'grid grid-cols-1 gap-2'; // full width for better reading
+    } else if (product.category === 'Pizzas') {
+      sizeSection.classList.remove('hidden');
+      sizeLabel.innerText = 'Tamaño';
+      sizeGrid.className = 'grid grid-cols-2 gap-2';
+      sizeGrid.innerHTML = `
+        <label class="glass-card p-3 flex items-center gap-2 cursor-pointer text-xs font-medium hover:border-orange-500">
+          <input type="radio" name="prodSize" value="Mediana" data-price="${product.price}" checked class="accent-orange-500">
+          <span>Mediana (6 Porc.)</span>
+        </label>
+        <label class="glass-card p-3 flex items-center gap-2 cursor-pointer text-xs font-medium hover:border-orange-500">
+          <input type="radio" name="prodSize" value="Familiar" data-price="${Number(product.price) + 2500}" class="accent-orange-500">
+          <span>Familiar (+$2.500)</span>
+        </label>
+      `;
+    } else {
+      sizeSection.classList.add('hidden');
+      sizeGrid.innerHTML = `<input type="radio" name="prodSize" value="Estándar" data-price="${product.price}" checked class="hidden">`;
+    }
 
     modal.classList.remove('hidden');
     modal.classList.add('flex');
@@ -374,23 +548,21 @@ const FlunaApp = {
 
   addCurrentModalItemToCart() {
     const product = this.state.selectedProductForModal;
-    if (!product) return;
+    const selectedSizeInput = document.querySelector('input[name="prodSize"]:checked');
+    const sizeOpt = selectedSizeInput ? selectedSizeInput.value : 'Mediana';
+    const basePrice = selectedSizeInput && selectedSizeInput.dataset.price ? parseFloat(selectedSizeInput.dataset.price) : product.price;
 
-    const sizeOpt = document.querySelector('input[name="prodSize"]:checked')?.value || 'Mediana';
     const extraCheese = document.getElementById('optExtraCheese')?.checked || false;
     const specialNotes = document.getElementById('modalSpecialNotes')?.value || '';
 
     let extraPrice = 0;
-    if (sizeOpt === 'Familiar (8 Porciones)') extraPrice += 2500;
     if (extraCheese) extraPrice += 1200;
-
-    const finalUnitPrice = Number(product.price) + extraPrice;
 
     const cartItem = {
       cart_id: 'ITEM-' + Date.now() + Math.random(),
       product_id: product.id,
       name: `${product.name} (${sizeOpt})`,
-      price: finalUnitPrice,
+      price: basePrice + extraPrice,
       quantity: 1,
       options: {
         size: sizeOpt,
